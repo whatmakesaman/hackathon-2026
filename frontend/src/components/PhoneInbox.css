@@ -27,3 +27,9 @@
 @media (prefers-reduced-motion: reduce) {
   .bubble, .phone__banner, .phone__banner--danger { animation: none; }
 }
+
+.bubble__open { display: block; width: 100%; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.bubble__open .bubble__text { display: block; }
+.bubble__open:focus-visible { outline: 3px solid #2b59ff; outline-offset: 3px; border-radius: 16px; }
+.bubble__open:disabled { cursor: default; }
+.bubble__hint { display: block; margin: 4px 0 0 6px; color: #2b59ff; font-size: 12px; }

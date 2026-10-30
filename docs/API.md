@@ -40,12 +40,21 @@
 
 | `level` | 화면 이름 | 점수 구간 | 알림 |
 |---|---|---|---|
-| `safe` | 안전 | 0 ~ 29 | 없음 |
-| `caution` | 주의 | 30 ~ 59 | 조용히 |
+| `safe` | 안전 | 0 ~ 19 | 없음 |
+| `caution` | 주의 | 20 ~ 59 | 조용히 |
 | `danger` | 위험 | 60 이상 | 소리·진동 |
 
-- 점수는 **0~100 정수**입니다. 규칙마다 한 번만 더하고, 합이 100을 넘으면 100으로 맞춥니다.
-- 구간 경계값은 `rules.yaml`의 `levels`에서 정합니다. 기본값은 `caution: 30`, `danger: 60`입니다.
+- 점수는 **0~100 정수의 모델 판정 점수**이며 사기 확률이 아닙니다. 문자 2~4-gram 다항 나이브 베이즈의 통계 점수를 검증 자료로 정한 경계에 맞춰 표시합니다.
+- 구간 경계값은 `rules.yaml`의 `levels`에서 정합니다. 현재값은 `caution: 20`, `danger: 60`입니다.
+
+### 모델과 규칙의 역할
+
+- 서버는 `backend/message_model.json.gz`를 시작할 때 한 번 읽습니다. CSV를 요청마다 읽거나 재학습하지 않습니다.
+- 모델이 `score`, `level`을 결정하고, 규칙은 의심 표현·유형·대응 안내를 제공합니다. 규칙 신호만으로 모델 판정을 올리지 않습니다.
+- `safe`는 유형 `정상`과 빈 `signals`, `advice`, `if_clicked`를 반환합니다.
+- `caution`·`danger`에는 `rule_id: model_pattern`인 모델 안내 신호를 먼저 넣습니다. 원문 특정 위치를 원인으로 단정하지 않으므로 `start`, `end`는 `null`입니다.
+- 나머지 신호는 규칙 참고 정보입니다. 모델이 경고했지만 규칙으로 유형을 찾지 못하면 `category`는 `기타 의심`입니다.
+- 모델 파일이 없거나 정규화 코드와 맞지 않으면 시작 오류로 알립니다. README의 모델 재학습 명령으로 다시 생성합니다.
 
 ### 입력 제한
 
@@ -83,10 +92,10 @@ FastAPI 기본 형식을 씁니다.
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
-| `rule_id` | string | `rules.yaml`의 규칙 `id` (예: `short_url`) |
+| `rule_id` | string | `rules.yaml`의 규칙 `id` (예: `short_url`) 또는 모델 안내 `model_pattern` |
 | `type` | string | 화면에 보이는 짧은 이름 (예: `단축URL`) |
-| `detail` | string | 문자에서 실제로 잡힌 부분 |
-| `weight` | integer | 이 신호가 더한 점수 |
+| `detail` | string | 규칙에서 발견한 원문 표현 또는 모델 판정 안내 문구 |
+| `weight` | integer | 참고 규칙의 가중치. 모델 판정 점수와 합산하지 않으며, 모델 안내 신호는 0 |
 | `explain` | string | "왜 위험한지" 쉬운 말 한 줄 |
 | `start` | integer \| null | 원문 기준 시작 위치. 위치가 없는 신호는 `null` |
 | `end` | integer \| null | 원문 기준 끝 위치(미포함). 위치가 없는 신호는 `null` |
@@ -112,7 +121,7 @@ FastAPI 기본 형식을 씁니다.
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | `level` | string | `safe` / `caution` / `danger` |
-| `score` | integer | 0~100 의심 신호 점수 |
+| `score` | integer | 0~100 모델 판정 점수 (확률 아님) |
 | `category` | string | 의심 유형. 아래 목록 중 하나 |
 | `signals` | Signal[] | 감지한 신호. 없으면 `[]` |
 | `advice` | string[] | "이렇게 하세요" 안내. `safe`면 `[]` |
