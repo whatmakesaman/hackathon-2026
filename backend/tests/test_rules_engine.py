@@ -14,15 +14,24 @@ def test_rules_yaml에_오류가_없다():
 def test_택배_사칭_문자는_위험이고_유형이_나온다():
     result = analyze_message("[Web발신] 택배 주소 불일치 확인 http://bit.ly/xxxx", RULES)
     assert result["level"] == "danger"
-    assert result["category"] == "택배·배송 사칭"
+    assert result["category"] == "택배·기관 사칭"
     assert result["advice"] and result["if_clicked"]
+    # 알림 문구가 "유형 · 첫 신호"이므로 첫 신호는 유형 규칙이 아닌 공통 신호여야 한다.
+    assert result["signals"][0]["rule_id"] in {"url", "short_url"}
+
+
+def test_유형이_명세서_목록_값으로_나온다():
+    allowed = {"지인 사칭", "택배·기관 사칭", "금융·코인 사칭", "지원금·대출", "원격앱 설치 유도", "기타 의심", "정상"}
+    texts = ["엄마 나 폰 액정이 깨졌어 문화상품권 보내줘", "카지노 바카라 첫충 30% http://a.top", "OTP 알려줘 즉시 http://a.xyz", "안녕"]
+    for text in texts:
+        assert analyze_message(text, RULES)["category"] in allowed
 
 
 def test_일상_문자는_안전이고_대응_안내가_없다():
     result = analyze_message("내일 저녁 7시에 강남역에서 보자", RULES)
     assert result["level"] == "safe"
-    assert result["category"] is None
-    assert result["signals"] == [] and result["if_clicked"] == []
+    assert result["category"] == "정상"
+    assert result["signals"] == [] and result["advice"] == [] and result["if_clicked"] == []
 
 
 def test_점수는_0에서_100_사이다():

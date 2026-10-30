@@ -112,13 +112,14 @@ def check(req: CheckRequest) -> CheckResponse:
 
 
 class IncomingRequest(CheckRequest):
-    sender: str = Field(default="", max_length=30, title="발신 번호", examples=["010-1234-5678"])
+    sender: str = Field(default="", max_length=50, title="발신 번호", examples=["010-1234-5678"])
 
 
-@app.post("/analyze", tags=["문자 검사"], summary="문자 분석 후 결과 보관(10분)")
+@app.post("/analyze", tags=["문자 검사"], summary="문자 분석 (저장·알림 없음)")
 def analyze_text(req: CheckRequest) -> dict:
     result = analyze_message(req.text, RULES)
-    return {"result_id": store.save(result), **result}
+    # 분석 전용 API라 원문을 되돌려 주지 않는다. (docs/API.md의 Result)
+    return {key: value for key, value in result.items() if key != "text"}
 
 
 @app.post("/simulate/incoming", tags=["시뮬레이터"], summary="문자 수신 시뮬레이션(분석→보관→알림 판단)")
@@ -145,8 +146,8 @@ def simulate_incoming(req: IncomingRequest, background: BackgroundTasks) -> dict
 def get_result(result_id: str) -> dict:
     result = store.get(result_id)
     if result is None:
-        raise HTTPException(status_code=404, detail="결과가 없거나 만료되었습니다 (10분 보관)")
-    return result
+        raise HTTPException(status_code=404, detail="결과를 찾을 수 없거나 만료되었어요")
+    return {"result_id": result_id, **result}
 
 
 @app.get("/samples", tags=["시뮬레이터"], summary="시연용 샘플 문자 목록")

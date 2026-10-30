@@ -17,19 +17,25 @@ def test_문자_수신_후_결과를_조회할_수_있다():
     assert "bit.ly" not in body["notification"]["body"]
 
     result = client.get(f"/result/{body['result_id']}").json()
-    assert result["text"] == SPAM
+    assert result["text"] == SPAM and result["result_id"] == body["result_id"]
     assert {"score", "level", "category", "signals", "advice", "if_clicked", "expires_in"} <= result.keys()
+
+
+def test_analyze는_저장하지_않고_결과만_돌려준다():
+    body = client.post("/analyze", json={"text": SPAM}).json()
+    assert body.keys() == {"level", "score", "category", "signals", "advice", "if_clicked"}
 
 
 def test_안전한_문자는_알림을_보내지_않는다():
     body = client.post("/simulate/incoming", json={"text": "내일 7시에 보자"}).json()
-    assert body["level"] == "safe"
+    assert body["level"] == "safe" and body["category"] == "정상"
     assert body["notified"] is False and body["notification"] is None
 
 
 def test_없거나_만료된_결과는_404다(monkeypatch):
-    assert client.get("/result/없는id").status_code == 404
-    result_id = client.post("/analyze", json={"text": SPAM}).json()["result_id"]
+    res = client.get("/result/없는id")
+    assert res.status_code == 404 and res.json()["detail"] == "결과를 찾을 수 없거나 만료되었어요"
+    result_id = client.post("/simulate/incoming", json={"text": SPAM}).json()["result_id"]
     monkeypatch.setattr(store.time, "monotonic", lambda: 10**12)
     assert client.get(f"/result/{result_id}").status_code == 404
 

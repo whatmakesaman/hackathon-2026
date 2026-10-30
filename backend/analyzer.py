@@ -97,6 +97,8 @@ def analyze(text, weights):
 
 RULE_GROUPS = ("signals", "categories", "safe_signals")
 DEFAULT_LEVELS = {"danger": 60, "caution": 30}
+SAFE_CATEGORY = "정상"
+OTHER_CATEGORY = "기타 의심"  # caution 이상인데 맞는 유형이 없을 때 (docs/API.md)
 SEPARATOR_CHARS = set("-_.*·~")  # '코-인-원'처럼 한글 사이에 끼워 필터를 피하는 문자
 DEFAULT_ADVICE = {
     "danger": ["문자 속 링크를 누르지 마세요", "발신 번호로 전화하거나 답장하지 마세요"],
@@ -191,12 +193,15 @@ def analyze_message(text, rules):
 
     - 규칙 하나는 패턴이 여러 개 맞아도 weight를 한 번만 더한다. 점수는 0~100.
     - categories는 서로 다른 패턴이 min_hits개 이상 맞아야 해당 유형이 된다.
+    - 의심 유형은 규칙의 category 값별로 weight를 합해 가장 큰 것을 고른다.
     - safe_signals는 점수만 깎고 위험 신호 목록에는 넣지 않는다.
+    - signals는 공통 신호(링크 등)를 먼저, 유형 신호를 뒤에 둔다. 알림 문구가 "유형 · 첫 신호"라서
+      첫 신호가 유형과 겹치지 않게 하려는 것이다.
     - start/end는 원문 글자(코드포인트) 기준이라 프론트의 Array.from 위치와 맞는다.
-    반환: {"text", "score", "level", "category", "signals", "advice", "if_clicked"}
+    반환: {"text", "score", "level", "category", "signals", "advice", "if_clicked"} (docs/API.md의 Result)
     """
     normalized, index = normalize(text)
-    total, signals, matched_categories = 0, [], []
+    total, matched, signals_by_group = 0, [], {"signals": [], "categories": []}
     for group in RULE_GROUPS:
         for rule in rules[group]:
             spans = [s for s in (_find(p, text, normalized, index) for p in rule["compiled"]) if s]
@@ -204,11 +209,10 @@ def analyze_message(text, rules):
             if len(spans) < need:
                 continue
             total += rule["weight"]
-            if group == "categories":
-                matched_categories.append(rule)
+            matched.append(rule)
             if group != "safe_signals":
                 start, end = spans[0]
-                signals.append({
+                signals_by_group[group].append({
                     "rule_id": rule["id"],
                     "type": rule["name"],
                     "detail": text[start:end],
@@ -220,18 +224,32 @@ def analyze_message(text, rules):
 
     score = max(0, min(100, total))
     level = _level(score, rules["levels"])
-    top = max(matched_categories, key=lambda r: r["weight"]) if matched_categories and level != "safe" else None
-    advice = ([top["advice"]] if top and top.get("advice") else []) + DEFAULT_ADVICE[level]
+    category = _pick_category(matched, level)
+    advice_rules = [r for r in matched if r.get("category") == category and r.get("advice")]
+    top = max(advice_rules, key=lambda r: r["weight"]) if advice_rules and level != "safe" else None
+    advice = ([top["advice"]] if top else []) + DEFAULT_ADVICE[level]
     if_clicked = [] if level == "safe" else (top or {}).get("if_clicked") or IF_CLICKED
+    signals = [s for group in ("signals", "categories")
+               for s in sorted(signals_by_group[group], key=lambda s: s["weight"], reverse=True)]
     return {
         "text": text,
         "score": score,
         "level": level,
-        "category": top["name"] if top else None,
-        "signals": sorted(signals, key=lambda s: s["weight"], reverse=True),
+        "category": category,
+        "signals": signals,
         "advice": advice,
         "if_clicked": if_clicked,
     }
+
+
+def _pick_category(matched, level):
+    if level == "safe":
+        return SAFE_CATEGORY
+    weights = Counter()
+    for rule in matched:
+        if rule.get("category"):
+            weights[rule["category"]] += rule["weight"]
+    return weights.most_common(1)[0][0] if weights else OTHER_CATEGORY
 
 
 def check_rules(path):
