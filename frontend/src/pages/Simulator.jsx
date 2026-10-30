@@ -1,20 +1,17 @@
-import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { samples as mockSamples } from '../mocks/sample'
-import NotificationBanner from '../components/NotificationBanner'
-import './Simulator.css'
+import PhoneInbox from '../components/PhoneInbox'
 
-export default function Simulator() {
-  const navigate = useNavigate()
+export default function Simulator({ inbox, addMessage }) {
   // 서버 샘플(GET /samples)을 못 받아도 시연할 수 있게 목 샘플로 먼저 채워 둔다.
   const [samples, setSamples] = useState(mockSamples)
   const [text, setText] = useState('')
+  const [sender, setSender] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [banner, setBanner] = useState(null)
-  const [safeNotice, setSafeNotice] = useState(false)
-  const closeBanner = useCallback(() => setBanner(null), [])
+  const [sent, setSent] = useState(false)
+  const textLength = Array.from(text).length
 
   useEffect(() => {
     api('/samples')
@@ -22,75 +19,90 @@ export default function Simulator() {
       .catch(() => {})
   }, [])
 
-  async function receive() {
+  async function send(event) {
+    event.preventDefault()
+    if (loading || !text.trim() || textLength > 2000) return
     setLoading(true)
     setError('')
-    setBanner(null)
-    setSafeNotice(false)
+    setSent(false)
     try {
       const res = await api('/simulate/incoming', {
         method: 'POST',
-        body: JSON.stringify({ text, sender: '010-1234-5678' }),
+        body: JSON.stringify({ text, ...(sender ? { sender } : {}) }),
+        signal: AbortSignal.timeout(15000),
       })
-      if (res.notified && res.notification) setBanner(res)
-      else setSafeNotice(true)
+      addMessage({
+        id: crypto.randomUUID(),
+        sender,
+        text,
+        receivedAt: Date.now(),
+        result: res,
+      })
+      setSent(true)
     } catch {
-      setError('분석에 실패했어요. 잠시 후 다시 시도해 주세요.')
+      setError('전송 실패. 서버 연결을 확인한 뒤 다시 시도해 주세요.')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <main className="sim">
-      {banner && (
-        <NotificationBanner
-          level={banner.level}
-          notification={banner.notification}
-          onOpen={(url) => navigate(url)}
-          onClose={closeBanner}
-        />
-      )}
-      <header className="sim__head">
-        <h1 className="sim__title">문자 수신 시뮬레이터</h1>
-        <p className="sim__sub">문자를 받으면 알림이 뜨고, 알림을 누르면 결과 화면이 열려요.</p>
-      </header>
+    <main style={{ maxWidth: 1100, margin: '0 auto', padding: 16, display: 'flex', flexWrap: 'wrap', gap: 24 }}>
+      <form onSubmit={send} className="page card" style={{ flex: '1 1 320px', minWidth: 0, maxWidth: '100%', margin: 0 }}>
+      <h1 className="title">문자 발신 패널</h1>
+      <p className="muted">샘플을 고르거나 직접 입력한 뒤 문자를 보내세요.</p>
 
-      <div className="sim__samples" role="group" aria-label="샘플 문자">
+      <div className="samples">
         {samples.map((s) => (
-          <button
-            key={s.id || s.label}
-            type="button"
-            className="sim__chip"
-            aria-pressed={text === s.text}
-            onClick={() => setText(s.text)}
-          >
+          <button key={s.id || s.label} type="button" className="chip" disabled={loading} onClick={() => {
+            setText(Array.from(s.text).slice(0, 2000).join(''))
+            setSender(Array.from(s.sender || '').slice(0, 50).join(''))
+            setSent(false)
+            setError('')
+          }}>
             {s.label}
           </button>
         ))}
       </div>
 
-      <section className="sim__card">
-        <label htmlFor="msg" className="sim__label">받을 문자</label>
-        <textarea
-          id="msg"
-          className="sim__input"
-          value={text}
-          maxLength={2000}
-          rows={6}
-          placeholder="샘플을 고르거나 문자 내용을 입력하세요"
-          onChange={(e) => setText(e.target.value)}
-        />
-        <div className="sim__count">{text.length}/2000</div>
-      </section>
+      <label htmlFor="sender">발신번호 (선택, 최대 50자)</label>
+      <input
+        id="sender"
+        type="text"
+        value={sender}
+        disabled={loading}
+        placeholder="010-1234-5678"
+        style={{ width: '100%', padding: 12, border: '1px solid var(--line)', borderRadius: 12, font: 'inherit' }}
+        onChange={(event) => {
+          setSender(Array.from(event.target.value).slice(0, 50).join(''))
+          setSent(false)
+        }}
+      />
+      <label htmlFor="msg">문자 내용</label>
+      <textarea
+        id="msg"
+        value={text}
+        disabled={loading}
+        aria-describedby="message-count"
+        rows={6}
+        placeholder="문자 내용을 입력하세요"
+        onChange={(event) => {
+          setText(Array.from(event.target.value).slice(0, 2000).join(''))
+          setSent(false)
+        }}
+      />
+      <div id="message-count" className="count">{textLength}/2000</div>
 
-      <button type="button" className="sim__receive" disabled={loading || !text.trim()} onClick={receive}>
-        {loading ? '분석 중…' : '문자 받기'}
+      <button type="submit" className="primary" disabled={loading || !text.trim()}>
+        {loading ? '전송 중…' : '문자 보내기'}
       </button>
 
-      {error && <p className="sim__error" role="alert">{error}</p>}
-      {safeNotice && <p className="sim__safe" role="status">위험 신호가 발견되지 않아 알림을 보내지 않았어요</p>}
-      {banner && <p className="sim__hint">위에 뜬 알림을 눌러 결과를 확인해 보세요</p>}
+      {error && <p className="error" role="alert">{error}</p>}
+      {sent && <p className="safe-notice" role="status">발송됨</p>}
+      </form>
+      <aside aria-label="수신 화면" style={{ flex: '1 1 320px', minWidth: 0 }}>
+        <PhoneInbox inbox={inbox} />
+      </aside>
     </main>
   )
 }

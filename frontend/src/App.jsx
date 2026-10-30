@@ -1,14 +1,14 @@
 import { Route, Routes } from 'react-router-dom'
 import Simulator from './pages/Simulator'
 import Result from './pages/Result'
-import PhonePreview from './pages/PhonePreview'
+import useInbox from './useInbox'
 
 export default function App() {
+  const { inbox, addMessage } = useInbox()
   return (
     <Routes>
-      <Route path="/" element={<Simulator />} />
+      <Route path="/" element={<Simulator inbox={inbox} addMessage={addMessage} />} />
       <Route path="/result/:id" element={<Result />} />
-      <Route path="/phone" element={<PhonePreview />} />
     </Routes>
   )
 }

@@ -70,12 +70,17 @@ export default function PhoneInbox({ inbox = [] }) {
     }
     const fresh = inbox.filter((m) => !seen.current.has(m.id))
     fresh.forEach((m) => seen.current.add(m.id))
-    fresh.filter(shouldAlert).forEach((m) => {
+    if (fresh.length === 0) return
+    timers.current.forEach(clearTimeout)
+    timers.current = []
+    setBanner(null)
+    const latest = fresh[fresh.length - 1]
+    if (shouldAlert(latest)) {
       timers.current.push(setTimeout(() => {
-        setBanner(m)
-        if (m.result.level === 'danger') ringDanger()
+        setBanner(latest)
+        if (latest.result.level === 'danger') ringDanger()
       }, BANNER_DELAY_MS))
-    })
+    }
   }, [inbox])
 
   useEffect(() => {
@@ -112,7 +117,16 @@ export default function PhoneInbox({ inbox = [] }) {
                 <span className="bubble__sender">{shortSender(m.sender)}</span>
                 <time dateTime={new Date(m.receivedAt).toISOString()}>{formatTime(m.receivedAt)}</time>
               </div>
-              <p className="bubble__text">{m.text}</p>
+              <button
+                type="button"
+                className="bubble__open"
+                disabled={!m.result?.result_id}
+                aria-label={`${shortSender(m.sender)} 문자 분석 결과 보기`}
+                onClick={() => navigate(`/result/${encodeURIComponent(m.result.result_id)}`)}
+              >
+                <span className="bubble__text">{m.text}</span>
+                <span className="bubble__hint">분석 결과 보기 →</span>
+              </button>
             </li>
           ))}
         </ol>
