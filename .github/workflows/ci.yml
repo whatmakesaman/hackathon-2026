@@ -2,13 +2,76 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
+  node:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check
-        run: echo "CI OK"
+
+      - name: Find Node projects
+        id: find
+        run: |
+          dirs=$(find . -name package.json -not -path '*/node_modules/*' -exec dirname {} \; | sort | tr '\n' ' ')
+          echo "dirs=$dirs" >> "$GITHUB_OUTPUT"
+          [ -n "$dirs" ] && echo "found=true" >> "$GITHUB_OUTPUT" || echo "No Node project found, skipping"
+
+      - uses: actions/setup-node@v4
+        if: steps.find.outputs.found == 'true'
+        with:
+          node-version: 20
+
+      - name: Install, build, test
+        if: steps.find.outputs.found == 'true'
+        run: |
+          for d in ${{ steps.find.outputs.dirs }}; do
+            echo "::group::$d"
+            (
+              cd "$d"
+              if [ -f package-lock.json ]; then npm ci; else npm install; fi
+              npm run build --if-present
+              npm test --if-present
+            )
+            echo "::endgroup::"
+          done
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Find Python projects
+        id: find
+        run: |
+          dirs=$(find . -name requirements.txt -not -path '*/venv/*' -not -path '*/.venv/*' -exec dirname {} \; | sort | tr '\n' ' ')
+          echo "dirs=$dirs" >> "$GITHUB_OUTPUT"
+          [ -n "$dirs" ] && echo "found=true" >> "$GITHUB_OUTPUT" || echo "No Python project found, skipping"
+
+      - uses: actions/setup-python@v5
+        if: steps.find.outputs.found == 'true'
+        with:
+          python-version: "3.12"
+
+      - name: Install and test
+        if: steps.find.outputs.found == 'true'
+        run: |
+          for d in ${{ steps.find.outputs.dirs }}; do
+            echo "::group::$d"
+            (
+              cd "$d"
+              pip install -r requirements.txt
+              if [ -f manage.py ]; then
+                python manage.py test
+              else
+                pip install pytest
+                pytest || [ $? -eq 5 ]  # exit 5 = no tests collected
+              fi
+            )
+            echo "::endgroup::"
+          done
