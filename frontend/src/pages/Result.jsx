@@ -6,7 +6,6 @@ import { toneVars } from '../tones'
 import LevelHeader from '../components/LevelHeader'
 import HighlightedText from '../components/HighlightedText'
 import SignalList from '../components/SignalList'
-import LinkAnatomy from '../components/LinkAnatomy'
 import AdviceList from '../components/AdviceList'
 import ClickedGuide from '../components/ClickedGuide'
 import ExpiredNotice from '../components/ExpiredNotice'
@@ -89,8 +88,6 @@ export default function Result() {
         </div>
         <SignalList signals={signals} active={active} onPick={setActive} />
       </section>
-
-      {r.level !== 'safe' && <LinkAnatomy text={r.text} />}
 
       <AdviceList advice={r.advice || []} />
 

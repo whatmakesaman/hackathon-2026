@@ -19,9 +19,7 @@ export default function SignalList({ signals = [], active = null, onPick }) {
               <span className="reason__body">
                 <span className="reason__type">{s.type}</span>
                 {s.explain && <span className="reason__explain">{s.explain}</span>}
-                {s.detail && <code className="reason__detail">{s.detail}</code>}
               </span>
-              <span className="reason__weight" aria-label={`${s.weight}점`}>+{s.weight}</span>
             </button>
           </li>
         )
