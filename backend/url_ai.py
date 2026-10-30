@@ -94,8 +94,8 @@ def check_urls(text: str) -> dict | None:
     return {"verdict": verdict.verdict, "reason": verdict.reason.strip()[:120], **urls[0]}
 
 
-def apply_ai_verdict(result: dict, ai: dict | None) -> dict:
-    """AI 판정을 신호 목록 맨 앞에 넣는다. 점수는 그대로 두고, 악성인데 안전이면 등급만 주의로 올린다."""
+def apply_ai_verdict(result: dict, ai: dict | None, caution_score: int = 20) -> dict:
+    """AI 판정을 신호 목록 맨 앞에 넣는다. 악성인데 안전이면 모델 단독 탐지처럼 최소 주의 점수의 주의로 올린다."""
     if ai is None:
         return result
     result = {**result, "ai_url": {"verdict": ai["verdict"], "reason": ai["reason"], "url": ai["url"]}}
@@ -113,6 +113,7 @@ def apply_ai_verdict(result: dict, ai: dict | None) -> dict:
     result["signals"] = [signal] + list(result.get("signals", []))
     if ai["verdict"] == "malicious" and result["level"] == "safe":
         result.update({
+            "score": max(result["score"], caution_score),
             "level": "caution",
             "category": OTHER_CATEGORY,
             "advice": DEFAULT_ADVICE["caution"],
