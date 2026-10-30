@@ -1,17 +1,25 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
-import { samples } from '../mocks/sample'
+import { samples as mockSamples } from '../mocks/sample'
 import NotificationBanner from '../components/NotificationBanner'
 
 export default function Simulator() {
   const navigate = useNavigate()
+  // 서버 샘플(GET /samples)을 못 받아도 시연할 수 있게 목 샘플로 먼저 채워 둔다.
+  const [samples, setSamples] = useState(mockSamples)
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [banner, setBanner] = useState(null)
   const [safeNotice, setSafeNotice] = useState(false)
   const closeBanner = useCallback(() => setBanner(null), [])
+
+  useEffect(() => {
+    api('/samples')
+      .then((list) => { if (Array.isArray(list) && list.length) setSamples(list) })
+      .catch(() => {})
+  }, [])
 
   async function receive() {
     setLoading(true)
@@ -47,7 +55,7 @@ export default function Simulator() {
 
       <div className="samples">
         {samples.map((s) => (
-          <button key={s.label} type="button" className="chip" onClick={() => setText(s.text)}>
+          <button key={s.id || s.label} type="button" className="chip" onClick={() => setText(s.text)}>
             {s.label}
           </button>
         ))}
