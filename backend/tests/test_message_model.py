@@ -70,7 +70,7 @@ def test_rule_explanations_keep_original_positions():
     assert references
     for signal in references:
         assert text[signal["start"]:signal["end"]] == signal["detail"]
-        assert signal["explain"].startswith("규칙 참고: ")
+        assert signal["explain"].startswith("규칙 근거: ")
 
 
 def test_missing_or_incompatible_model_reports_startup_problem(tmp_path):
@@ -102,11 +102,47 @@ def test_all_analysis_endpoints_use_the_loaded_model(monkeypatch):
     monkeypatch.setattr(main, "send_to_all", lambda payload: None)
     with TestClient(main.app) as client:
         direct = client.post("/analyze", json={"text": "안녕하세요"})
-        assert direct.status_code == 200 and direct.json()["level"] == "danger"
+        assert direct.status_code == 200 and direct.json()["level"] == "caution"
         assert set(direct.json()) == {"score", "level", "category", "signals", "advice", "if_clicked"}
         incoming = client.post("/simulate/incoming", json={"text": "안녕하세요"}).json()
-        assert incoming["level"] == "danger" and incoming["notified"] is True
+        assert incoming["level"] == "caution" and incoming["notified"] is True
         stored = client.get(f"/result/{incoming['result_id']}").json()
         assert stored["score"] == direct.json()["score"] and stored["text"] == "안녕하세요"
         legacy = client.post("/api/check", json={"text": "안녕하세요"}).json()
-        assert legacy["level"] == "위험" and legacy["reasons"]
+        assert legacy["level"] == "주의" and legacy["reasons"]
+
+
+@pytest.mark.parametrize("margin", [1, 10, 10000])
+def test_model_strength_alone_does_not_raise_warning_to_danger(margin):
+    result = analyze_with_model("안녕하세요!", RULES, model_at(margin))
+    assert result["score"] == 20 and result["level"] == "caution"
+    assert len(result["signals"]) == 1
+    from analyzer import DEFAULT_ADVICE
+    assert result["advice"] == DEFAULT_ADVICE["caution"]
+
+
+@pytest.mark.parametrize("rule_score, expected_score, expected_level", [
+    (0, 20, "caution"), (19, 20, "caution"), (20, 20, "caution"),
+    (59, 59, "caution"), (60, 60, "danger"), (100, 100, "danger"),
+])
+def test_rule_evidence_controls_warning_grade(monkeypatch, rule_score, expected_score, expected_level):
+    import message_model
+    from analyzer import DEFAULT_ADVICE
+    reference = {"score": rule_score, "level": "safe", "category": "정상",
+                 "signals": [], "advice": [], "if_clicked": []}
+    monkeypatch.setattr(message_model, "analyze_message", lambda text, rules: reference)
+    result = analyze_with_model("경계값 검사", RULES, model_at(10000))
+    assert (result["score"], result["level"]) == (expected_score, expected_level)
+    assert result["advice"] == DEFAULT_ADVICE[expected_level]
+
+
+def test_real_danger_combination_keeps_rule_score_and_highlights():
+    from analyzer import analyze_message
+    text = "[Web발신] CJ대한통운 주소 불일치로 배송이 보류되었습니다. 주소 확인 http://bit.ly/xxxx"
+    reference = analyze_message(text, RULES)
+    result = analyze_with_model(text, RULES, main.MODEL)
+    assert reference["score"] == result["score"] == 60
+    assert result["level"] == "danger" and len(result["signals"]) > 1
+    assert build_notification(result, "danger-test")["title"].startswith("⚠️")
+    for signal in result["signals"][1:]:
+        assert text[signal["start"]:signal["end"]] == signal["detail"]
