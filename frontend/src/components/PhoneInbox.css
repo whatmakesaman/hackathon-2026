@@ -1,0 +1,35 @@
+/* 수신 폰 화면 (B 담당) */
+.phone { width: min(360px, 100%); margin: 0 auto; padding: 12px; border-radius: 44px; background: #1c1c1e; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+.phone__screen { position: relative; height: min(680px, 80vh); min-height: 480px; border-radius: 34px; background: #fff; overflow: hidden; display: flex; flex-direction: column; }
+.phone__status { display: flex; justify-content: space-between; padding: 10px 22px 4px; font-size: 13px; font-weight: 600; }
+.phone__status-icons { font-size: 11px; letter-spacing: 1px; }
+.phone__header { padding: 6px 16px 10px; font-size: 17px; font-weight: 700; text-align: center; border-bottom: 1px solid var(--line); }
+
+.phone__list { flex: 1; margin: 0; padding: 12px; list-style: none; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; background: var(--bg); }
+.phone__empty { margin: auto; color: var(--muted); font-size: 14px; }
+
+.bubble { align-self: flex-start; max-width: 85%; animation: bubble-in .35s ease-out; }
+.bubble__meta { display: flex; gap: 6px; align-items: baseline; margin: 0 0 2px 4px; font-size: 12px; color: var(--muted); }
+.bubble__sender { font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.bubble__text { margin: 0; padding: 10px 12px; background: #fff; border-radius: 4px 16px 16px 16px; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+
+/* 공용 .banner는 화면 위 고정이라, 폰 안에서는 폰 화면 기준으로 내려오게 바꾼다. */
+.phone__banner { position: absolute; top: 34px; left: 8px; right: 8px; z-index: 2; animation: phone-drop .35s ease-out; }
+.phone__banner .banner { position: static; transform: none; width: 100%; max-width: none; animation: none; }
+.phone__banner--caution .banner { border-width: 1px; box-shadow: 0 4px 12px rgba(0,0,0,.12); }
+.phone__banner--danger { animation: phone-drop .35s ease-out, phone-shake .2s .35s 3; }
+.phone__banner--danger .banner { border-width: 3px; box-shadow: 0 6px 24px rgba(209,45,45,.45); }
+
+@keyframes phone-drop { from { transform: translateY(-140%); } to { transform: translateY(0); } }
+@keyframes phone-shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+@keyframes bubble-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble, .phone__banner, .phone__banner--danger { animation: none; }
+}
+
+.bubble__open { display: block; width: 100%; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.bubble__open .bubble__text { display: block; }
+.bubble__open:focus-visible { outline: 3px solid #2b59ff; outline-offset: 3px; border-radius: 16px; }
+.bubble__open:disabled { cursor: default; }
+.bubble__hint { display: block; margin: 4px 0 0 6px; color: #2b59ff; font-size: 12px; }

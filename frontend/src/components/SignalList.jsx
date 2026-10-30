@@ -11,7 +11,7 @@ export default function SignalList({ signals = [] }) {
             <li key={`${s.rule_id}-${i}`} className="signals__item">
               <div className="signals__head">
                 <strong>{s.type}</strong>
-                <span className="signals__weight">+{s.weight}</span>
+                <span className="signals__weight">{s.rule_id === 'model_pattern' ? '모델 판정' : '규칙 참고'}</span>
               </div>
               {s.detail && <code className="signals__detail">{s.detail}</code>}
               <p className="signals__explain">{s.explain}</p>
