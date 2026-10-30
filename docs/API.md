@@ -56,6 +56,14 @@
 - 나머지 신호는 규칙 참고 정보입니다. 모델이 경고했지만 규칙으로 유형을 찾지 못하면 `category`는 `기타 의심`입니다.
 - 모델 파일이 없거나 정규화 코드와 맞지 않으면 시작 오류로 알립니다. README의 모델 재학습 명령으로 다시 생성합니다.
 
+### AI 링크 분석 (`/analyze`, `/simulate/incoming`)
+
+- 문자에 링크가 있고 `ANTHROPIC_API_KEY`(환경 변수 또는 루트 `.env`)가 있으면 Claude가 링크를 `malicious` / `suspicious` / `safe`로 판정합니다.
+- AI는 링크에 **접속하지 않고** 주소 모양과 문자 맥락만 봅니다.
+- `malicious`·`suspicious`면 `rule_id: ai_url` 신호를 `signals` 맨 앞에 넣습니다. `start`, `end`는 첫 번째 링크 위치입니다.
+- `score`는 바꾸지 않습니다. 모델이 `safe`인데 AI가 `malicious`면 `level`만 `caution`으로 올립니다(유형 `기타 의심`).
+- 키가 없거나 호출이 실패하면(8초 제한) AI 판정 없이 기존 결과를 그대로 돌려줍니다.
+
 ### 입력 제한
 
 | 필드 | 규칙 |
@@ -92,7 +100,7 @@ FastAPI 기본 형식을 씁니다.
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
-| `rule_id` | string | `rules.yaml`의 규칙 `id` (예: `short_url`) 또는 모델 안내 `model_pattern` |
+| `rule_id` | string | `rules.yaml`의 규칙 `id` (예: `short_url`), 모델 안내 `model_pattern`, AI 링크 판정 `ai_url` |
 | `type` | string | 화면에 보이는 짧은 이름 (예: `단축URL`) |
 | `detail` | string | 규칙에서 발견한 원문 표현 또는 모델 판정 안내 문구 |
 | `weight` | integer | 참고 규칙의 가중치. 모델 판정 점수와 합산하지 않으며, 모델 안내 신호는 0 |
@@ -126,6 +134,7 @@ FastAPI 기본 형식을 씁니다.
 | `signals` | Signal[] | 감지한 신호. 없으면 `[]` |
 | `advice` | string[] | "이렇게 하세요" 안내. `safe`면 `[]` |
 | `if_clicked` | string[] | "이미 눌렀거나 송금했다면" 안내. `safe`면 `[]` |
+| `ai_url` | object (선택) | AI 링크 판정 `{"verdict", "reason", "url"}`. 판정하지 않았으면 필드 없음 |
 
 `category` 값:
 

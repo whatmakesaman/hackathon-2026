@@ -15,6 +15,7 @@ from message_model import analyze_with_model, load_model
 from notification import build_notification
 from push import send_to_all
 from push_routes import router as push_router
+from url_ai import apply_ai_verdict, check_urls
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 RULES_PATH = ROOT_DIR / "rules.yaml"
@@ -124,16 +125,21 @@ class IncomingRequest(CheckRequest):
     sender: str = Field(default="", max_length=50, title="발신 번호", examples=["010-1234-5678"])
 
 
+def analyze_full(text: str) -> dict:
+    # 단어 점수 모델 결과에 AI 링크 판정을 덧붙인다. AI가 실패하면 모델 결과 그대로다.
+    return apply_ai_verdict(analyze_with_model(text, RULES, MODEL), check_urls(text))
+
+
 @app.post("/analyze", tags=["문자 검사"], summary="문자 분석 (저장·알림 없음)")
 def analyze_text(req: CheckRequest) -> dict:
-    result = analyze_with_model(req.text, RULES, MODEL)
+    result = analyze_full(req.text)
     # 분석 전용 API라 원문을 되돌려 주지 않는다. (docs/API.md의 Result)
     return {key: value for key, value in result.items() if key != "text"}
 
 
 @app.post("/simulate/incoming", tags=["시뮬레이터"], summary="문자 수신 시뮬레이션(분석→보관→알림 판단)")
 def simulate_incoming(req: IncomingRequest, background: BackgroundTasks) -> dict:
-    result = analyze_with_model(req.text, RULES, MODEL)
+    result = analyze_full(req.text)
     result_id = store.save(result)
     notification = build_notification(result, result_id)
     if notification:
