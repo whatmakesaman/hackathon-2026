@@ -1,22 +1,44 @@
+import json
+import logging
+from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
+import store
+from analyzer import analyze_message, load_rules
+from notification import build_notification
+from push import send_to_all
+from push_routes import router as push_router
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
+RULES_PATH = ROOT_DIR / "rules.yaml"
+SAMPLES_PATH = ROOT_DIR / "data" / "demo_samples.json"
+LEVEL_KO = {"safe": "안전", "caution": "주의", "danger": "위험"}
+
+logger = logging.getLogger(__name__)
+
+# 규칙은 서버가 켜질 때 한 번만 읽는다. 잘못된 규칙은 건너뛰고 경고만 남긴다.
+RULES, RULE_WARNINGS = load_rules(RULES_PATH)
+for warning in RULE_WARNINGS:
+    logger.warning("규칙 건너뜀: %s", warning)
+
 app = FastAPI(
     title="스팸 문자 검사 API",
-    description="문자를 입력하고 검사 결과를 확인하세요. 현재는 임시 결과(50점·주의)를 반환합니다.",
+    description="문자를 입력하고 검사 결과를 확인하세요. rules.yaml 규칙으로 채점합니다.",
     docs_url=None,
 )
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://localhost:5173"],
-    allow_methods=["POST"],
+    allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
 )
+app.include_router(push_router)
 
 
 @app.get("/docs", include_in_schema=False, response_class=HTMLResponse)
@@ -79,10 +101,57 @@ class CheckResponse(BaseModel):
 @app.post(
     "/api/check", response_model=CheckResponse, tags=["문자 검사"],
     summary="문자의 스팸 위험도 검사",
-    description="직접 입력하기를 누르고 text에 문자를 입력한 뒤 검사 실행을 누르세요. 현재 결과는 임시 값입니다.",
+    description="직접 입력하기를 누르고 text에 문자를 입력한 뒤 검사 실행을 누르세요.",
     response_description="문자 검사 결과",
     responses={422: {"description": "입력 오류: text 누락, 빈 값, 공백만 있는 값 또는 2000자 초과"}},
 )
 def check(req: CheckRequest) -> CheckResponse:
-    # shortcut: 임시 결과이며, B·C 모듈 완성 후 학습 및 분석 함수를 연결한다.
-    return CheckResponse(score=50, level="주의", reasons=[])
+    result = analyze_message(req.text, RULES)
+    reasons = list(dict.fromkeys(s["detail"] for s in result["signals"]))
+    return CheckResponse(score=result["score"], level=LEVEL_KO[result["level"]], reasons=reasons)
+
+
+class IncomingRequest(CheckRequest):
+    sender: str = Field(default="", max_length=30, title="발신 번호", examples=["010-1234-5678"])
+
+
+@app.post("/analyze", tags=["문자 검사"], summary="문자 분석 후 결과 보관(10분)")
+def analyze_text(req: CheckRequest) -> dict:
+    result = analyze_message(req.text, RULES)
+    return {"result_id": store.save(result), **result}
+
+
+@app.post("/simulate/incoming", tags=["시뮬레이터"], summary="문자 수신 시뮬레이션(분석→보관→알림 판단)")
+def simulate_incoming(req: IncomingRequest, background: BackgroundTasks) -> dict:
+    result = analyze_message(req.text, RULES)
+    result_id = store.save(result)
+    notification = build_notification(result, result_id)
+    if notification:
+        # 푸시 발송이 느리거나 실패해도 화면 응답은 바로 돌려준다.
+        background.add_task(send_to_all, notification)
+    return {
+        "result_id": result_id,
+        "level": result["level"],
+        "category": result["category"],
+        "notified": notification is not None,
+        "notification": notification,
+    }
+
+
+@app.get(
+    "/result/{result_id}", tags=["문자 검사"], summary="보관 중인 분석 결과 조회",
+    responses={404: {"description": "결과가 없거나 10분이 지나 만료됨"}},
+)
+def get_result(result_id: str) -> dict:
+    result = store.get(result_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="결과가 없거나 만료되었습니다 (10분 보관)")
+    return result
+
+
+@app.get("/samples", tags=["시뮬레이터"], summary="시연용 샘플 문자 목록")
+def get_samples() -> list:
+    if not SAMPLES_PATH.exists():
+        return []
+    with open(SAMPLES_PATH, encoding="utf-8") as f:
+        return json.load(f)
