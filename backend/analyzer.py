@@ -100,6 +100,12 @@ DEFAULT_LEVELS = {"danger": 60, "caution": 30}
 SAFE_CATEGORY = "정상"
 OTHER_CATEGORY = "기타 의심"  # caution 이상인데 맞는 유형이 없을 때 (docs/API.md)
 SEPARATOR_CHARS = set("-_.*·~/")  # '코-인-원'처럼 한글 사이에 끼워 필터를 피하는 문자
+TEXT_ALIASES = {
+    "캬톡": "카톡", "까톡": "카톡", "카똑": "카톡",
+    "땔래": "텔레그램", "땔레": "텔레그램", "텔래": "텔레그램", "테레": "텔레그램",
+    "사e트": "사이트",
+}
+ALIAS_RE = re.compile("|".join(map(re.escape, TEXT_ALIASES)), re.I)
 DEFAULT_ADVICE = {
     "danger": ["문자 속 링크를 누르지 마세요", "발신 번호로 전화하거나 답장하지 마세요"],
     "caution": ["보낸 곳을 공식 앱이나 대표번호로 직접 확인하세요"],
@@ -164,7 +170,7 @@ def normalize(text):
         if ch in SEPARATOR_CHARS and 0 < i < len(text) - 1 and _is_hangul(text[i - 1]) and _is_hangul(text[i + 1]):
             continue
         for out in unicodedata.normalize("NFKC", ch):
-            chars.append(out)
+            chars.append("." if out in "。｡" else out)
             index.append(i)
     normalized = "".join(chars)
     # 주소 구분자 주변 공백만 제거해 뒤의 일반 문장과 붙지 않게 한다.
@@ -177,6 +183,14 @@ def normalize(text):
         if gaps:
             index = [pos for i, pos in enumerate(index) if i not in gaps]
             normalized = "".join(ch for i, ch in enumerate(normalized) if i not in gaps)
+    # 길이가 달라지는 별칭도 원문 위치를 보존해 하이라이트가 어긋나지 않게 한다.
+    for match in reversed(list(ALIAS_RE.finditer(normalized))):
+        replacement = TEXT_ALIASES[match.group().casefold()]
+        positions = index[match.start():match.end()]
+        index[match.start():match.end()] = [
+            positions[j * len(positions) // len(replacement)] for j in range(len(replacement))
+        ]
+        normalized = normalized[:match.start()] + replacement + normalized[match.end():]
     return normalized, index
 
 

@@ -127,3 +127,53 @@ def test_normalized_url_match_maps_to_original(text):
     signal = next(s for s in result["signals"] if s["rule_id"] == "short_url")
     assert text[signal["start"]:signal["end"]] == signal["detail"]
     assert "bit.ly" in normalize(signal["detail"])[0] or "bit . ly" in signal["detail"]
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("blogspot。com", "blogspot.com"),
+    ("blogspot｡com", "blogspot.com"),
+    ("캬톡 문의", "카톡 문의"),
+    ("까톡 약속", "카톡 약속"),
+    ("땔래:abcd1234", "텔레그램:abcd1234"),
+    ("사E트 안내", "사이트 안내"),
+])
+def test_common_alias_normalization(text, expected):
+    normalized, index = normalize(text)
+    assert normalized == expected
+    assert len(normalized) == len(index)
+    assert index == sorted(index)
+    assert all(0 <= pos < len(text) for pos in index)
+
+
+@pytest.mark.parametrize("text, rule_id", [
+    ("선톡 가입 문의만 해도 햄버거 세트 드려요", "signup_reward"),
+    ("하루 2o만 이상 날마다 지급 땔래 상담", "high_pay_recruit"),
+    ("[국제발신] 아마존 해외결제 본인 요청 아닐경우 소비자문의:02-0000-0000", "overseas_payment_contact"),
+])
+def test_behavior_combinations(text, rule_id):
+    result = analyze_message(text, RULES)
+    assert result["level"] != "safe"
+    assert any(s["rule_id"] == rule_id for s in result["signals"])
+    for signal in result["signals"]:
+        assert text[signal["start"]:signal["end"]] == signal["detail"]
+
+
+@pytest.mark.parametrize("text, absent_rule", [
+    ("카톡으로 치킨 주문 이야기하자", "signup_reward"),
+    ("가입 방법은 고객센터에 문의하세요", "signup_reward"),
+    ("하루 20만원 날마다 지급 이메일로 지원", "high_pay_recruit"),
+    ("하루 2o만 카톡 상담", "high_pay_recruit"),
+    ("아마존 해외결제 정상 승인 완료", "overseas_payment_contact"),
+    ("본인 요청이 아닐 경우 공식 앱에서 확인하세요", "overseas_payment_contact"),
+])
+def test_partial_combinations_do_not_add_signal(text, absent_rule):
+    result = analyze_message(text, RULES)
+    assert all(s["rule_id"] != absent_rule for s in result["signals"])
+
+
+def test_expanded_alias_keeps_original_contact_highlight():
+    text = "😀 땔래:abcd1234"
+    result = analyze_message(text, RULES)
+    signal = next(s for s in result["signals"] if s["rule_id"] == "messenger_contact")
+    assert signal["detail"] == "땔래:abcd1234"
+    assert text[signal["start"]:signal["end"]] == signal["detail"]
