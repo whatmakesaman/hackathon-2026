@@ -135,20 +135,27 @@ AI 코딩 도구(Claude Code, Codex, Cursor 등)가 이 레포에서 작업할 �
 
 ## Git 작업 시 자동 적용 규칙
 
-사용자가 "커밋해줘", "올려줘", "PR 만들어줘"처럼 말하면, 따로 말하지 않아도 아래 순서를 **그대로 실행**합니다.
-세부 내용이 헷갈리면 추측하지 말고 `GIT_CONVENTION.md`를 다시 읽습니다.
+사용자가 "커밋해줘", "올려줘", "PR 만들어줘", "merge해줘"처럼 말하면, 따로 말하지 않아도 아래 순서를 **그대로 실행**합니다.
+세부 내용이 헷갈리면 추측하지 말고 `GIT_CONVENTION.md`를 다시 읽습니다. (이 섹션과 `GIT_CONVENTION.md`가 다르면 `GIT_CONVENTION.md`가 우선입니다)
+
+### 브랜치를 만들 때
+1. `git fetch origin` 후 `git branch --show-current`로 현재 브랜치를 확인합니다. `main`, `dev`에서는 **커밋하지 않고** 멈춥니다.
+2. 이미 내 작업 브랜치가 있고 PR이 아직 merge되지 않았다면 **새로 만들지 않고 그 브랜치에서 이어서** 합니다.
+3. 새 브랜치는 **최신 `origin/dev`** 에서 만듭니다: `git switch -c 타입/기능명 origin/dev`
+   - 이름은 `feature/`, `fix/`, `docs/`, `design/`, `refactor/`, `chore/` 중 하나로 시작하고, 영어 소문자·숫자·하이픈만 씁니다. (`#`, 한글, 대문자 금지)
+4. ⚠️ 이렇게 만든 브랜치는 `origin/dev`를 추적합니다. 그래서 **`git push`만 단독으로 쓰지 말고 항상 `git push origin <브랜치 이름>`** 으로 씁니다.
 
 ### 커밋할 때
-1. `git branch --show-current`로 현재 브랜치를 확인합니다. `main`, `dev`라면 **커밋하지 않고** 멈춘 뒤, 브랜치를 만들어도 되는지 사용자에게 묻습니다.
-2. 브랜치가 없다면 최신 `dev`에서 `타입/기능명`(영어 소문자와 하이픈) 이름으로 만듭니다.
-3. 변경은 **한 가지 일 단위**로 나눠서 커밋합니다. `git add .`나 `git add -A` 대신 파일을 지정해서 추가하고, `.env`·키·`node_modules/`·`.DS_Store`가 섞이지 않았는지 `git status`로 확인합니다.
-4. 커밋 메시지는 `타입: 한 줄 설명` 형식입니다. (`feat`, `fix`, `docs`, `style`, `refactor`, `chore`)
-   "수정", "작업" 같은 한 단어 메시지는 쓰지 않습니다.
+1. 변경은 **한 가지 일 단위**로 나눠서 커밋합니다.
+2. `git add .`나 `git add -A` 대신 **파일을 지정**해서 추가합니다. 추가한 뒤 `git status`로 `.env`·키·`node_modules/`·`.DS_Store`가 섞이지 않았는지 확인합니다.
+3. 커밋 메시지는 `타입: 한 줄 설명` 형식입니다. 타입은 `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`입니다.
+   - **한국어**로 쓰고 이모지나 `✨ Feat :` 같은 장식은 붙이지 않습니다. "수정", "작업" 같은 한 단어 메시지는 쓰지 않습니다.
 
 ### push할 때
-1. **내 feature 브랜치에만** push합니다. `main`, `dev`에는 push하지 않습니다.
-2. `--force`는 쓰지 않습니다.
-3. push 전에 "작업을 끝내기 전 (필수)"의 확인(실행·빌드·`git diff`·충돌 사전 검사)을 먼저 합니다.
+1. **내 작업 브랜치에만** push합니다. `main`, `dev`에는 push하지 않습니다. `--force`는 쓰지 않습니다.
+2. push 전에 "작업을 끝내기 전 (필수)"의 확인(실행·빌드·`git diff`)을 먼저 합니다.
+3. `git fetch origin && git merge origin/dev`로 최신 `dev`를 내 브랜치에 합쳐 보고 실행이 되는지 확인합니다. (`rebase`는 쓰지 않습니다)
+   충돌이 나면 **임의로 해결하지 말고** 어느 파일의 어느 부분인지 사용자에게 알립니다.
 
 ### PR을 만들 때
 1. **base는 항상 `dev`** 입니다. (`gh pr create --base dev`) `main`으로 올리지 않습니다.
@@ -156,25 +163,33 @@ AI 코딩 도구(Claude Code, Codex, Cursor 등)가 이 레포에서 작업할 �
 3. 본문은 `.github/pull_request_template.md`의 항목(무엇을 했나요 / 어떻게 확인하나요 / 체크)을 **그대로 유지하면서** 채웁니다.
    - `<!-- -->` 안내 주석은 지우고 실제 내용을 적습니다.
    - 체크 항목은 **실제로 확인한 것만** `[x]`로 표시합니다. 확인하지 않은 항목은 비워 두고 사용자에게 알립니다.
-   - 리뷰어가 특히 봐줬으면 하는 부분이 있으면 본문 끝에 덧붙입니다. (없으면 생략)
 4. PR은 작게, 기능 하나만 담습니다. 여러 기능이 섞였다면 나누자고 제안합니다.
 5. PR을 만든 뒤 **PR 링크를 사용자에게 알리고**, 팀 채널에 공유하라고 상기시킵니다. (AI가 직접 올리지 않습니다)
 
 ### merge할 때
-- 승인(Approve)이 1개 이상 있는지 먼저 확인합니다. 없으면 merge하지 않습니다.
-- `feature/*` → `dev`는 **Squash and merge**, `dev` → `main`은 **Merge commit(팀장만)** 입니다.
-- 본인이 올린 PR을 승인 없이 merge하지 않습니다.
+**승인(Approve)은 필요 없습니다.** 대신 사용자가 "merge해줘"라고 했을 때, 아래를 **실제로 확인한 뒤에만** merge합니다.
+
+1. CI 통과: `gh pr checks <번호>`가 모두 성공이다. (진행 중이면 기다리고, 실패면 merge하지 않고 원인을 고칩니다)
+2. 충돌 없음: `gh pr view <번호> --json mergeable`이 `MERGEABLE`이다.
+3. PR 본문 템플릿이 채워져 있다.
+4. `git diff origin/dev --stat`에 비밀 정보나 의도하지 않은 파일이 없다.
+5. 사용자가 팀 채널에 PR 링크를 공유했다고 확인해 주었다.
+
+모두 통과하면 `gh pr merge <번호> --squash --delete-branch`로 합니다. 하나라도 어긋나면 merge하지 않고 이유를 알립니다.
+- CI를 통과시키려고 **검사를 끄거나 테스트를 지우지 않습니다.**
+- `dev` → `main` merge는 **팀장만** 합니다. AI는 팀장이라고 확인된 사용자가 요청해도, 제출 직전인지 먼저 묻습니다.
+- merge 후에는 `git switch dev && git pull origin dev`로 최신을 받고, merge된 브랜치는 더 쓰지 않습니다.
 
 ## Git 규칙 (요약)
 
 전체 규칙은 `GIT_CONVENTION.md`에 있습니다.
 
-- 브랜치 구조: `main`(제출용) / `dev`(통합) / `feature/*`(개별 작업)
+- 브랜치 구조: `main`(제출용) / `dev`(통합) / `타입/기능명`(개별 작업)
 - **`main`, `dev`에 직접 commit·push 하지 않습니다.** 작업은 항상 내 브랜치에서 합니다.
-- 브랜치 이름: `feature/기능명`, `fix/버그명`, `docs/문서명`, `design/화면명`
-- 커밋 메시지: `타입: 한 줄 설명` (`feat`, `fix`, `docs`, `style`, `refactor`, `chore`)
+- 브랜치 이름: `feature/기능명`, `fix/버그명`, `docs/문서명`, `design/화면명`, `refactor/대상`, `chore/내용`
+- 커밋 메시지: `타입: 한 줄 설명` (`feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`)
   - 예: `feat: 업로드 화면 추가`
-- PR은 **`dev`로** 올리고, 승인(Approve) 1개 이상을 받은 뒤 merge합니다.
+- PR은 **`dev`로** 올리고, CI 통과·충돌 없음을 확인하면 **승인 없이** 본인이 Squash and merge 합니다.
 - `git push --force`는 사용하지 않습니다.
 
 ## 보안 주의
