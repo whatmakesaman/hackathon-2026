@@ -1,12 +1,20 @@
 """스팸 문자 점수 분석기.
 
-스팸/정상 문자 목록에서 단어별 스팸 가중치를 학습하고(train),
-새 문자의 단어 가중치를 합산해 0~100점의 스팸 점수를 낸다(analyze).
-파일이나 DB는 직접 읽지 않는다. 학습 데이터는 호출하는 쪽에서 넘겨준다.
+1) 학습 방식: 스팸/정상 문자 목록에서 단어별 스팸 가중치를 학습하고(train),
+   새 문자의 단어 가중치를 합산해 0~100점의 스팸 점수를 낸다(analyze).
+   학습 데이터는 호출하는 쪽에서 넘겨준다.
+2) 규칙 방식(노션 기능 명세): rules.yaml 규칙으로 채점하고(analyze_message),
+   결과 화면에 쓸 의심 유형·위험 신호·원문 위치·대응 안내를 함께 돌려준다.
+   규칙 파일 검사: python analyzer.py --check [rules.yaml 경로]
 """
 import math
 import re
+import sys
+import unicodedata
 from collections import Counter
+from pathlib import Path
+
+import yaml
 
 BIAS = -2.0  # 대부분의 문자는 정상이므로, 증거가 쌓여야 점수가 올라가게 하는 기준값
 MAX_WEIGHT = 3.0  # 단어 하나가 점수를 혼자 좌우하지 않도록 제한
@@ -83,3 +91,162 @@ def analyze(text, weights):
             if w > 0 and shown not in reasons:
                 reasons.append(shown)
     return {"score": score, "level": level, "reasons": reasons}
+
+
+# ── 규칙 방식 (rules.yaml) ─────────────────────────────────────
+
+RULE_GROUPS = ("signals", "categories", "safe_signals")
+DEFAULT_LEVELS = {"danger": 60, "caution": 30}
+SEPARATOR_CHARS = set("-_.*·~")  # '코-인-원'처럼 한글 사이에 끼워 필터를 피하는 문자
+DEFAULT_ADVICE = {
+    "danger": ["문자 속 링크를 누르지 마세요", "발신 번호로 전화하거나 답장하지 마세요"],
+    "caution": ["보낸 곳을 공식 앱이나 대표번호로 직접 확인하세요"],
+    "safe": [],
+}
+IF_CLICKED = [
+    "설치한 앱이 있다면 바로 삭제하고 비행기 모드로 바꾸세요",
+    "입력한 비밀번호와 금융 인증서를 변경하세요",
+    "송금했다면 즉시 은행 고객센터나 112에 지급정지를 요청하세요",
+]
+
+
+def load_rules(path):
+    """rules.yaml을 읽어 정규식을 미리 컴파일한다. 서버 시작 때 한 번만 부른다.
+
+    잘못된 규칙은 서버가 죽지 않도록 건너뛰고 경고 목록에 담는다.
+    반환: (rules, warnings)
+    """
+    with open(path, encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    rules = {"levels": {**DEFAULT_LEVELS, **(data.get("levels") or {})}}
+    warnings = []
+    for group in RULE_GROUPS:
+        rules[group] = []
+        for i, raw in enumerate(data.get(group) or []):
+            try:
+                rules[group].append(_compile_rule(raw))
+            except (KeyError, TypeError, ValueError, re.error) as e:
+                rule_id = raw.get("id", "?") if isinstance(raw, dict) else "?"
+                warnings.append(f"{group}[{i}] {rule_id}: {e}")
+    return rules, warnings
+
+
+def _compile_rule(raw):
+    if not isinstance(raw, dict):
+        raise TypeError("규칙은 키: 값 형태여야 합니다")
+    missing = [k for k in ("id", "name", "weight", "patterns") if k not in raw]
+    if missing:
+        raise KeyError(f"필수 필드 없음: {', '.join(missing)}")
+    if not raw["patterns"]:
+        raise ValueError("patterns가 비어 있습니다")
+    return {
+        **raw,
+        "weight": int(raw["weight"]),
+        "min_hits": int(raw.get("min_hits", 1)),
+        "compiled": [re.compile(p, re.I) for p in raw["patterns"]],
+    }
+
+
+def _is_hangul(ch):
+    return "가" <= ch <= "힣"
+
+
+def normalize(text):
+    """변형 표기를 편다. 전각→반각, 원문자→일반 문자(NFKC), 한글 사이 구분자 제거.
+
+    반환: (정리한 문장, 정리한 문장의 각 글자가 원문 몇 번째 글자인지 담은 목록)
+    예: "코-인-원" → "코인원"
+    """
+    chars, index = [], []
+    for i, ch in enumerate(text):
+        if ch in SEPARATOR_CHARS and 0 < i < len(text) - 1 and _is_hangul(text[i - 1]) and _is_hangul(text[i + 1]):
+            continue
+        for out in unicodedata.normalize("NFKC", ch):
+            chars.append(out)
+            index.append(i)
+    return "".join(chars), index
+
+
+def _find(pattern, text, normalized, index):
+    """원문에서 먼저 찾고, 없으면 정리한 문장에서 찾아 원문 위치로 바꾼다. 반환: (start, end) 또는 None"""
+    m = pattern.search(text)
+    if m and m.end() > m.start():
+        return m.start(), m.end()
+    m = pattern.search(normalized)
+    if m and m.end() > m.start():
+        return index[m.start()], index[m.end() - 1] + 1
+    return None
+
+
+def _level(score, levels):
+    if score >= levels["danger"]:
+        return "danger"
+    if score >= levels["caution"]:
+        return "caution"
+    return "safe"
+
+
+def analyze_message(text, rules):
+    """rules.yaml 규칙으로 문자를 채점한다.
+
+    - 규칙 하나는 패턴이 여러 개 맞아도 weight를 한 번만 더한다. 점수는 0~100.
+    - categories는 서로 다른 패턴이 min_hits개 이상 맞아야 해당 유형이 된다.
+    - safe_signals는 점수만 깎고 위험 신호 목록에는 넣지 않는다.
+    - start/end는 원문 글자(코드포인트) 기준이라 프론트의 Array.from 위치와 맞는다.
+    반환: {"text", "score", "level", "category", "signals", "advice", "if_clicked"}
+    """
+    normalized, index = normalize(text)
+    total, signals, matched_categories = 0, [], []
+    for group in RULE_GROUPS:
+        for rule in rules[group]:
+            spans = [s for s in (_find(p, text, normalized, index) for p in rule["compiled"]) if s]
+            need = rule["min_hits"] if group == "categories" else 1
+            if len(spans) < need:
+                continue
+            total += rule["weight"]
+            if group == "categories":
+                matched_categories.append(rule)
+            if group != "safe_signals":
+                start, end = spans[0]
+                signals.append({
+                    "rule_id": rule["id"],
+                    "type": rule["name"],
+                    "detail": text[start:end],
+                    "weight": rule["weight"],
+                    "explain": rule.get("description", ""),
+                    "start": start,
+                    "end": end,
+                })
+
+    score = max(0, min(100, total))
+    level = _level(score, rules["levels"])
+    top = max(matched_categories, key=lambda r: r["weight"]) if matched_categories and level != "safe" else None
+    advice = ([top["advice"]] if top and top.get("advice") else []) + DEFAULT_ADVICE[level]
+    if_clicked = [] if level == "safe" else (top or {}).get("if_clicked") or IF_CLICKED
+    return {
+        "text": text,
+        "score": score,
+        "level": level,
+        "category": top["name"] if top else None,
+        "signals": sorted(signals, key=lambda s: s["weight"], reverse=True),
+        "advice": advice,
+        "if_clicked": if_clicked,
+    }
+
+
+def check_rules(path):
+    """rules.yaml 오류를 출력한다. 규칙 담당자가 push 전에 실행한다. 오류가 있으면 1을 돌려준다."""
+    rules, warnings = load_rules(path)
+    for w in warnings:
+        print(f"[오류] {w}")
+    count = sum(len(rules[g]) for g in RULE_GROUPS)
+    print(f"정상 규칙 {count}개, 오류 {len(warnings)}개 (위험 {rules['levels']['danger']}점~, 주의 {rules['levels']['caution']}점~)")
+    return 1 if warnings else 0
+
+
+if __name__ == "__main__":
+    args = [a for a in sys.argv[1:] if a != "--check"]
+    if "--check" not in sys.argv:
+        print("사용법: python analyzer.py --check [rules.yaml 경로]")
+        sys.exit(2)
+    sys.exit(check_rules(args[0] if args else Path(__file__).resolve().parent.parent / "rules.yaml"))

@@ -28,17 +28,20 @@
 
 schema_version: "0.1-draft"
 
+# 노션 기능 명세 기준(안전 0~29 / 주의 30~59 / 위험 60~).
+# 70/40일 때는 "링크+단축URL+택배"(60점) 같은 전형적인 택배 스미싱이 주의로만 나왔다.
 levels:
-  danger: 70
-  caution: 40
+  danger: 60
+  caution: 30
 
 signals:
   - id: url
     name: 링크 포함
     weight: 20
     patterns:
-      - 'https?://'
-      - '\bwww\.'
+      # 결과 화면에서 주소 전체가 하이라이트되도록 공백 전까지 잡는다.
+      - 'https?://\S+'
+      - '\bwww\.\S+'
       # 한글이 바로 붙는 경우(xx.com주말)가 많아 \b 대신 영문·숫자 경계로 검사.
       # 도메인 안에 원문자(uuo⑨.com)·한글(게임마을.com)·마스킹(*)이 섞인 경우도 포함
       - '[\w*ⓐ-ⓩⒶ-Ⓩ①-⑳-]+\.(com|net|org|kr|co|me|io|info|biz|xyz|top|shop|vip|cc|site|online|click|link|live|club|guru|host|cool|su|in|ly|gd)(?![a-z0-9])'
