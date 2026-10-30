@@ -6,7 +6,7 @@ from typing import Literal
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 import store
@@ -29,7 +29,14 @@ MODEL = load_model()
 for warning in RULE_WARNINGS:
     logger.warning("규칙 건너뜀: %s", warning)
 
+
+class UTF8JSONResponse(JSONResponse):
+    # charset이 없으면 브라우저 주소창에서 열 때 한글을 EUC-KR로 추측해 깨져 보인다.
+    media_type = "application/json; charset=utf-8"
+
+
 app = FastAPI(
+    default_response_class=UTF8JSONResponse,
     title="스팸 문자 검사 API",
     description="학습 모델로 점수·등급을 판정하고, rules.yaml에서 발견한 표현을 참고 안내합니다. 점수는 확률이 아닙니다.",
     docs_url=None,
