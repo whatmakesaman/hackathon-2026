@@ -37,7 +37,7 @@ function analyze(text) {
   ]
   const score = Math.min(100, signals.reduce((s, x) => s + x.weight, 0) + (signals.length ? 20 : 0))
   const level = score >= 60 ? 'danger' : score >= 30 ? 'caution' : 'safe'
-  const category = level === 'safe' ? '정상' : text.includes('택배') || text.includes('배송') ? '택배·기관 사칭' : '당첨·경품 사칭'
+  const category = level === 'safe' ? '정상' : text.includes('택배') || text.includes('배송') ? '택배·기관 사칭' : '기타 의심'
   return { score, level, category, signals, advice: ADVICE[level], if_clicked: IF_CLICKED }
 }
 
@@ -59,7 +59,7 @@ export async function mockApi(path, options) {
       notified,
       notification: notified
         ? {
-            title: result.level === 'danger' ? '⚠️ 스팸 의심 문자' : '주의가 필요한 문자',
+            title: result.level === 'danger' ? '⚠️ 스팸 의심 문자' : '확인이 필요한 문자',
             body: `${result.category} · ${result.signals.map((s) => s.type).join(', ')}. 링크를 누르지 마세요`,
             url: `/result/${id}`,
           }
@@ -71,7 +71,9 @@ export async function mockApi(path, options) {
     const r = store.get(m[1])
     const left = r ? TTL - Math.floor((Date.now() - r.at) / 1000) : 0
     if (!r || left <= 0) throw Object.assign(new Error('not found'), { status: 404 })
-    return { ...r, expires_in: left }
+    // 저장 시각(at)은 내부용이라 응답에 넣지 않는다. (docs/API.md)
+    const { at, ...rest } = r
+    return { result_id: m[1], ...rest, expires_in: left }
   }
   throw Object.assign(new Error('not found'), { status: 404 })
 }
