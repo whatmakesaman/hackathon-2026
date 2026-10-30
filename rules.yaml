@@ -1,0 +1,201 @@
+# 스미싱 탐지 규칙 (백엔드 C 담당)
+#
+# ⚠️ 1차 초안(draft)입니다. 백엔드 A의 분석 엔진이 아직 저장소에 없어
+#    아래 포맷은 C가 "제안"하는 형식입니다. A와 합의 후 확정하세요.
+#
+# ── 제안 포맷 ────────────────────────────────────────────────
+# signals    : 유형과 무관한 공통 위험 신호 (링크, 국외발신, 개인정보 요구 등)
+# categories : 스미싱 유형 5가지. 결과 화면의 "의심 유형"과 안내 문구에 사용
+# safe_signals: 정상 문자에서 자주 보이는 신호. 음수 가중치로 점수를 깎음
+#
+# 각 규칙 공통 필드
+#   id          : 영문 식별자 (API 응답에 그대로 노출해도 되는 값)
+#   name        : 화면 표시용 이름
+#   weight      : 매칭 시 더할 점수 (safe_signals는 음수)
+#   patterns    : 파이썬 re 정규식 목록. 대소문자 무시(re.IGNORECASE)로 검사
+#   description : 결과 화면에 보여줄 "왜 위험한가" 한 줄 설명
+#
+# categories 추가 필드
+#   min_hits    : 서로 다른 패턴이 이 개수 이상 맞아야 해당 유형으로 판정
+#   advice      : 해당 유형일 때 사용자에게 보여줄 행동 안내
+#
+# 점수 계산(제안)
+#   - 규칙 하나는 패턴이 여러 개 맞아도 weight를 한 번만 더함
+#   - score = clamp(합계, 0, 100)
+#   - level: score >= levels.danger → 위험, >= levels.caution → 주의, 그 외 안전
+#   - 가장 높은 weight로 판정된 category를 "의심 유형"으로 표시
+# ─────────────────────────────────────────────────────────────
+
+schema_version: "0.1-draft"
+
+levels:
+  danger: 70
+  caution: 40
+
+signals:
+  - id: url
+    name: 링크 포함
+    weight: 20
+    patterns:
+      - 'https?://'
+      - '\bwww\.'
+      # 한글이 바로 붙는 경우(xx.com주말)가 많아 \b 대신 영문·숫자 경계로 검사.
+      # 도메인 안에 원문자(uuo⑨.com)·한글(게임마을.com)·마스킹(*)이 섞인 경우도 포함
+      - '[\w*ⓐ-ⓩⒶ-Ⓩ①-⑳-]+\.(com|net|org|kr|co|me|io|info|biz|xyz|top|shop|vip|cc|site|online|click|link|live|club|guru|host|cool|su|in|ly|gd)(?![a-z0-9])'
+    description: 문자에 링크가 들어 있습니다. 스미싱은 대부분 링크 클릭을 유도합니다.
+
+  - id: short_url
+    name: 단축·위장 링크
+    weight: 15
+    patterns:
+      - '(?<![a-z0-9])(bit\.ly|tinyurl\.com|is\.gd|han\.gy|me2\.do|vo\.la|t\.ly|cutt\.ly|url\.kr|dll\.kr|buly\.kr|c11\.kr|zrr\.kr|abit\.ly|shorturl\.at|goo\.gl|ko\.gl)(?![a-z0-9])'
+      - '(?<![a-z0-9])[a-z0-9-]+\.(xyz|top|shop|vip|cc|site|online|click|live|club|guru|host|cool|su|icu|buzz|monster)(?![a-z0-9])'
+      - 'https?://\d{1,3}(\.\d{1,3}){3}'
+    description: 실제 주소를 숨기는 단축 링크나 공식 기관이 쓰지 않는 도메인입니다.
+
+  - id: foreign_sender
+    name: 국외 발신
+    weight: 15
+    patterns:
+      - '\[?(국외|국제|해외)\s*발신\]?'
+    description: 해외에서 보낸 문자입니다. 국내 기관·택배사는 국외 번호로 안내하지 않습니다.
+
+  - id: urgency
+    name: 긴급·압박 표현
+    weight: 10
+    patterns:
+      - '즉시|긴급|급하게|급한대로|지금\s*바로|오늘\s*(까지|만)|마감\s*임박|선착순'
+      - '정지\s*(예정|처리)|차단\s*(예정|해)|법적\s*조치|압류|미납|연체'
+      - '본인\s*(이\s*)?아닐?\s*(경우|시)'
+    description: 서두르게 만들어 확인할 시간을 빼앗는 표현입니다.
+
+  - id: personal_info
+    name: 개인정보 요구
+    weight: 25
+    patterns:
+      - '(계좌|카드)\s*비밀?번호|비번'
+      - '신분증|주민(등록)?번호|여권\s*사진'
+      - '인증\s*번호.{0,10}(보내|알려|회신|입력해\s*줘)'
+      - 'OTP|보안카드'
+    description: 비밀번호·신분증·인증번호 등 금융 정보를 요구합니다.
+
+  - id: money_request
+    name: 송금·결제 요구
+    weight: 20
+    patterns:
+      - '입금\s*(해|부탁|좀)|송금\s*(해|부탁|좀)|이체\s*(해|부탁|좀)'
+      - '(문화|구글|편의점|기프트)\s*(상품권|카드|기프트)'
+      - '대신\s*결제|결제\s*(좀|해\s*줘)'
+    description: 돈을 보내거나 상품권 구매를 요구합니다.
+
+  - id: app_install
+    name: 앱 설치 유도
+    weight: 25
+    patterns:
+      - '\.apk\b'
+      - '(앱|어플|프로그램)\s*(을|를)?\s*(설치|다운)'
+      - '원격\s*(제어|지원)|팀뷰어|애니데스크'
+    description: 출처를 알 수 없는 앱 설치는 휴대폰 정보 탈취로 이어질 수 있습니다.
+
+  - id: messenger_contact
+    name: 메신저 연락 유도
+    weight: 10
+    patterns:
+      - '(카톡|카카오톡|텔레그램|텔레|라인)\s*(ID|아이디|문의|주세요|추가|친추)'
+      - '(카톡|텔레그램)\s*[:：]?\s*[a-z0-9_]{4,}'
+      # 변형 표기: "톡 : ox***", "텔레@ftd", "kakao☞cb", "카: sk"
+      - '(톡|툑|텔레|tele|kakao|카)\s*[:：@☞]'
+    description: 추적이 어려운 메신저로 대화를 옮기려 합니다.
+
+  - id: obfuscation
+    name: 문자 변형·우회 표기
+    weight: 20
+    patterns:
+      - '[ⓐ-ⓩⒶ-Ⓩ①-⑳]'
+      - '[Ａ-Ｚａ-ｚ０-９]{2,}'
+      - '[가-힣]-[가-힣]-[가-힣]'
+    description: 스팸 필터를 피하려고 글자를 변형해 썼습니다.
+
+categories:
+  - id: delivery
+    name: 택배·배송 사칭
+    weight: 25
+    min_hits: 1
+    patterns:
+      - '택배|배송|운송장|송장|물류|우체국|소포|등기'
+      - '주소\s*(불일치|불명|오류|확인|수정)|배송\s*(보류|불가|실패|지연)|미수령|반송'
+      - '(CJ|한진|롯데|로젠|우체국|농협|쿠팡)\s*(택배|대한통운)?'
+    description: 택배사나 쇼핑몰을 사칭해 가짜 배송 조회 링크를 보냅니다.
+    advice: 택배 조회는 문자 속 링크 대신 택배사 공식 앱이나 송장번호로 직접 하세요.
+
+  - id: institution
+    name: 공공기관 사칭
+    weight: 30
+    min_hits: 1
+    patterns:
+      - '검찰|지검|경찰(청)?|법원|금융감독원|금감원|국세청|건강보험|국민연금|정부\s*지원|교통\s*민원|도로공사'
+      - '범칙금|과태료|환급금?|벌금|출석\s*요구|사건\s*번호|수사|소환|건강\s*검진|(종합)?검사\s*결과'
+    description: 정부·수사기관을 사칭해 겁을 주거나 환급금을 미끼로 씁니다.
+    advice: 공공기관은 문자로 링크나 개인정보를 요구하지 않습니다. 해당 기관 대표번호로 직접 확인하세요.
+
+  - id: finance
+    name: 금융·결제·대출 사칭
+    weight: 25
+    min_hits: 1
+    patterns:
+      - '대출|대환|저금리|한도\s*(조회|승인)|특례\s*보증|신용\s*(무관|보증)|자금\s*(지원|승인)|무서류|당일\s*입금'
+      - '(해외|결제)\s*승인|승인\s*[0-9,]+\s*원|[0-9,]+\s*원\s*(결제|승인)|결제\s*완료|결제됩니다|승인\s*번호|이상\s*거래|로그인\s*(되었|되였|시도)'
+      - '(국민|신한|우리|하나|농협|기업|카카오)\s*(은행|뱅크|카드)|KB|삼성\s*(카드|페이)|코인원|업비트|빗썸'
+    description: 은행·카드사를 사칭하거나 결제 승인 알림으로 불안하게 만듭니다.
+    advice: 문자에 적힌 번호로 전화하지 말고, 카드사·은행 공식 앱이나 카드 뒷면 번호로 확인하세요.
+
+  - id: acquaintance
+    name: 가족·지인 사칭
+    weight: 30
+    min_hits: 1
+    patterns:
+      - '(엄마|아빠|어머니|아버지|이모|삼촌)\s*(나|저)'
+      - '(폰|핸드폰|휴대폰|액정)\s*(이|가)?\s*(고장|깨져|망가|수리)'
+      - '문자나라|피씨용|PC\s*로\s*문자|컴(퓨터|터)로\s*문자'
+      - '부고|청첩장|돌잔치|모바일\s*초대장'
+    description: 가족이나 지인인 척하며 급하게 돈이나 개인정보를 요구합니다.
+    advice: 문자에 답장하지 말고, 저장된 번호로 직접 전화해서 본인인지 확인하세요.
+
+  - id: illegal_ad
+    name: 도박·불법 광고
+    weight: 35
+    min_hits: 1
+    patterns:
+      - '카지노|CASINO|바카라|슬롯|토토|배팅|베팅|먹튀|스포츠\s*(픽|분석)|홀덤|파워볼'
+      # 필터 회피용 변형 표기 (데이터셋에서 자주 보임)
+      - '카지[누뉴]|캬즤노|카\.?쥐|CASlNO|CASIO|스롯|술룻|롤링|루징|환전|출금\s*제한|제재\s*(없|X)|프리\s*스핀|적립금|쿠폰|\[FW\]'
+      - '(가입|첫\s*충|매\s*충|신규)\s*(쿠폰|머니|포인트|\d+\s*%)|입플|올인|첫\s*[*\d]+\s*(%|퍼)|매\s*[*\d]+\s*%'
+      - '리딩방|수익\s*(보장|인증)|무료\s*(종목|리딩)|고액\s*알바|재택\s*알바|일당\s*\d+|에어\s*드[랍롭]|높은\s*차익'
+      # 가입 미끼 경품 (커피·치킨 기프티콘)
+      - '스벅|맥날|식사비|치킨\s*(쿠폰|지급)|커피\s*(쿠폰|지급)'
+      - '조건\s*만남|만남\s*주선|섹스|성인\s*(사이트|만남)'
+    description: 불법 도박·투자 리딩·성인 사이트로 유인하는 광고입니다.
+    advice: 링크에 접속하거나 가입하지 말고 바로 삭제·스팸 신고하세요.
+
+safe_signals:
+  - id: official_domain
+    name: 공식 도메인
+    weight: -25
+    patterns:
+      - 'https?://(www\.)?(coupang\.com|cjlogistics\.com|hanjin\.com|lotteglogis\.com|epost\.go\.kr|naver\.com|kakao\.com)(/|\b)'
+      - '\.go\.kr\b'
+    description: 알려진 공식 도메인입니다. (단, 비슷한 철자의 가짜 도메인에 주의)
+
+  - id: otp_notice
+    name: 정상 인증번호 안내
+    weight: -20
+    patterns:
+      - '타인에게\s*(절대\s*)?(알려|노출|공유)(주지|하지)\s*마'
+    description: 인증번호를 남에게 알리지 말라는 정상 안내 문구입니다.
+
+  - id: delivery_done
+    name: 정상 배송 완료 안내
+    weight: -15
+    patterns:
+      - '배송\s*완료\s*(하였|했|되었)습니다|도착\s*예정입니다|인수자'
+    description: 배송 완료 안내는 링크 클릭을 요구하지 않는 경우가 많습니다.
