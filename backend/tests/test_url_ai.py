@@ -40,10 +40,10 @@ def test_no_ai_result_keeps_model_result():
     assert apply_ai_verdict(SAFE_RESULT, None) is SAFE_RESULT
 
 
-def test_malicious_raises_safe_to_caution_and_keeps_score():
-    result = apply_ai_verdict(SAFE_RESULT, ai("malicious"))
+def test_malicious_raises_safe_to_caution_with_minimum_score():
+    result = apply_ai_verdict(SAFE_RESULT, ai("malicious"), caution_score=20)
     assert result["level"] == "caution"
-    assert result["score"] == 10
+    assert result["score"] == 20
     assert result["signals"][0]["rule_id"] == "ai_url"
     assert result["advice"] and result["if_clicked"]
     assert SAFE_RESULT["level"] == "safe"  # 원본은 바꾸지 않는다

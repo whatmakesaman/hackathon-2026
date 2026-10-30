@@ -62,7 +62,7 @@
 - 문자에 링크가 있고 `ANTHROPIC_API_KEY`(환경 변수 또는 루트 `.env`)가 있으면 Claude가 링크를 `malicious` / `suspicious` / `safe`로 판정합니다.
 - AI는 링크에 **접속하지 않고** 주소 모양과 문자 맥락만 봅니다.
 - `malicious`·`suspicious`면 `rule_id: ai_url` 신호를 `signals` 맨 앞에 넣습니다. `start`, `end`는 첫 번째 링크 위치입니다.
-- `score`는 바꾸지 않습니다. 모델이 `safe`인데 AI가 `malicious`면 `level`만 `caution`으로 올립니다(유형 `기타 의심`).
+- 기본적으로 `score`는 바꾸지 않습니다. 모델이 `safe`인데 AI가 `malicious`면 모델 단독 탐지와 같이 최소 주의 점수(20점)의 `caution`으로 올립니다(유형 `기타 의심`).
 - 키가 없거나 호출이 실패하면(8초 제한) AI 판정 없이 기존 결과를 그대로 돌려줍니다.
 
 ### 입력 제한

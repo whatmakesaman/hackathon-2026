@@ -39,7 +39,7 @@ class UTF8JSONResponse(JSONResponse):
 app = FastAPI(
     default_response_class=UTF8JSONResponse,
     title="스팸 문자 검사 API",
-    description="학습 모델로 점수·등급을 판정하고, rules.yaml에서 발견한 표현을 참고 안내합니다. 점수는 확률이 아닙니다.",
+    description="학습 모델이 의심 여부를 판단하고, rules.yaml의 위험 신호 점수로 주의·위험을 나눕니다. 점수는 확률이 아닙니다.",
     docs_url=None,
 )
 app.add_middleware(
@@ -103,7 +103,7 @@ class CheckRequest(BaseModel):
 
 
 class CheckResponse(BaseModel):
-    score: int = Field(ge=0, le=100, title="스팸 점수", description="0~100 모델 판정 점수이며 사기 확률이 아닙니다.", examples=[50])
+    score: int = Field(ge=0, le=100, title="스팸 점수", description="0~100 위험 신호 점수이며 사기 확률이 아닙니다.", examples=[50])
     level: Literal["안전", "주의", "위험"] = Field(title="위험 등급", examples=["주의"])
     reasons: list[str] = Field(title="의심 근거", description="모델 판정 안내와 규칙에서 발견한 참고 표현 목록", examples=[[]])
 
@@ -127,7 +127,7 @@ class IncomingRequest(CheckRequest):
 
 def analyze_full(text: str) -> dict:
     # 단어 점수 모델 결과에 AI 링크 판정을 덧붙인다. AI가 실패하면 모델 결과 그대로다.
-    return apply_ai_verdict(analyze_with_model(text, RULES, MODEL), check_urls(text))
+    return apply_ai_verdict(analyze_with_model(text, RULES, MODEL), check_urls(text), RULES["levels"]["caution"])
 
 
 @app.post("/analyze", tags=["문자 검사"], summary="문자 분석 (저장·알림 없음)")
