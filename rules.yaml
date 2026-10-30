@@ -18,6 +18,9 @@
 # categories 추가 필드
 #   min_hits    : 서로 다른 패턴이 이 개수 이상 맞아야 해당 유형으로 판정
 #   advice      : 해당 유형일 때 사용자에게 보여줄 행동 안내
+#   category    : API 응답의 category 값 (docs/API.md 4장 목록 중 하나)
+#                 signals에도 붙일 수 있음 (예: app_install → 원격앱 설치 유도)
+#                 같은 category끼리 weight를 합해 가장 큰 쪽을 의심 유형으로 고름
 #
 # 점수 계산(제안)
 #   - 규칙 하나는 패턴이 여러 개 맞아도 weight를 한 번만 더함
@@ -28,17 +31,20 @@
 
 schema_version: "0.1-draft"
 
+# 노션 기능 명세 기준(안전 0~29 / 주의 30~59 / 위험 60~).
+# 70/40일 때는 "링크+단축URL+택배"(60점) 같은 전형적인 택배 스미싱이 주의로만 나왔다.
 levels:
-  danger: 70
-  caution: 40
+  danger: 60
+  caution: 30
 
 signals:
   - id: url
     name: 링크 포함
     weight: 20
     patterns:
-      - 'https?://'
-      - '\bwww\.'
+      # 결과 화면에서 주소 전체가 하이라이트되도록 공백 전까지 잡는다.
+      - 'https?://\S+'
+      - '\bwww\.\S+'
       # 한글이 바로 붙는 경우(xx.com주말)가 많아 \b 대신 영문·숫자 경계로 검사.
       # 도메인 안에 원문자(uuo⑨.com)·한글(게임마을.com)·마스킹(*)이 섞인 경우도 포함
       - '[\w*ⓐ-ⓩⒶ-Ⓩ①-⑳-]+\.(com|net|org|kr|co|me|io|info|biz|xyz|top|shop|vip|cc|site|online|click|link|live|club|guru|host|cool|su|in|ly|gd)(?![a-z0-9])'
@@ -91,6 +97,7 @@ signals:
   - id: app_install
     name: 앱 설치 유도
     weight: 25
+    category: 원격앱 설치 유도
     patterns:
       - '\.apk\b'
       - '(앱|어플|프로그램)\s*(을|를)?\s*(설치|다운)'
@@ -120,6 +127,7 @@ categories:
   - id: delivery
     name: 택배·배송 사칭
     weight: 25
+    category: 택배·기관 사칭
     min_hits: 1
     patterns:
       - '택배|배송|운송장|송장|물류|우체국|소포|등기'
@@ -131,6 +139,7 @@ categories:
   - id: institution
     name: 공공기관 사칭
     weight: 30
+    category: 택배·기관 사칭
     min_hits: 1
     patterns:
       - '검찰|지검|경찰(청)?|법원|금융감독원|금감원|국세청|건강보험|국민연금|정부\s*지원|교통\s*민원|도로공사'
@@ -141,6 +150,8 @@ categories:
   - id: finance
     name: 금융·결제·대출 사칭
     weight: 25
+    # 대출 패턴도 함께 들어 있어서, '지원금·대출'로 나누려면 규칙을 따로 빼야 한다.
+    category: 금융·코인 사칭
     min_hits: 1
     patterns:
       - '대출|대환|저금리|한도\s*(조회|승인)|특례\s*보증|신용\s*(무관|보증)|자금\s*(지원|승인)|무서류|당일\s*입금'
@@ -152,6 +163,7 @@ categories:
   - id: acquaintance
     name: 가족·지인 사칭
     weight: 30
+    category: 지인 사칭
     min_hits: 1
     patterns:
       - '(엄마|아빠|어머니|아버지|이모|삼촌)\s*(나|저)'
@@ -164,6 +176,7 @@ categories:
   - id: illegal_ad
     name: 도박·불법 광고
     weight: 35
+    category: 기타 의심
     min_hits: 1
     patterns:
       - '카지노|CASINO|바카라|슬롯|토토|배팅|베팅|먹튀|스포츠\s*(픽|분석)|홀덤|파워볼'
