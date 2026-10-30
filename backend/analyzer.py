@@ -99,7 +99,7 @@ RULE_GROUPS = ("signals", "categories", "safe_signals")
 DEFAULT_LEVELS = {"danger": 60, "caution": 30}
 SAFE_CATEGORY = "정상"
 OTHER_CATEGORY = "기타 의심"  # caution 이상인데 맞는 유형이 없을 때 (docs/API.md)
-SEPARATOR_CHARS = set("-_.*·~")  # '코-인-원'처럼 한글 사이에 끼워 필터를 피하는 문자
+SEPARATOR_CHARS = set("-_.*·~/")  # '코-인-원'처럼 한글 사이에 끼워 필터를 피하는 문자
 DEFAULT_ADVICE = {
     "danger": ["문자 속 링크를 누르지 마세요", "발신 번호로 전화하거나 답장하지 마세요"],
     "caution": ["보낸 곳을 공식 앱이나 대표번호로 직접 확인하세요"],
