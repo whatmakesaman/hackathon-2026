@@ -1,3 +1,5 @@
+import pytest
+
 from pathlib import Path
 
 from analyzer import analyze_message, check_rules, load_rules, normalize
@@ -70,3 +72,108 @@ def test_잘못된_규칙은_건너뛰고_경고한다(tmp_path):
     rules, warnings = load_rules(bad)
     assert [r["id"] for r in rules["signals"]] == ["ok"]
     assert len(warnings) == 2
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("https:// bit.ly/abc", "https://bit.ly/abc"),
+    ("https:/ /example.com", "https://example.com"),
+    ("https://\nbit.ly/abc", "https://bit.ly/abc"),
+    ("https://example . com/login", "https://example.com/login"),
+    ("www.example . com", "www.example.com"),
+    ("https:// bit.ly/abc 다음 문장은 유지", "https://bit.ly/abc 다음 문장은 유지"),
+])
+def test_broken_url_normalization(text, expected):
+    normalized, index = normalize(text)
+    assert normalized == expected
+    assert "".join(text[i] for i in index) == expected
+
+
+@pytest.mark.parametrize("text, rule_id", [
+    ("https:/ /123.45.67.89/login", "short_url"),
+    ("https://bit . ly/abc", "short_url"),
+    ("인증번호 왔지? 그거 불러줘", "otp_forward_request"),
+    ("인증번호 받았으면\n그거 보내주세요", "otp_forward_request"),
+    ("[질병관리청COOV] 예방접종증명서 확인 https://ya.mba/test", "institution"),
+])
+def test_added_signal_and_original_positions(text, rule_id):
+    result = analyze_message(text, RULES)
+    assert result["level"] != "safe"
+    assert any(s["rule_id"] == rule_id for s in result["signals"])
+    for signal in result["signals"]:
+        assert text[signal["start"]:signal["end"]] == signal["detail"]
+
+
+@pytest.mark.parametrize("text, expected_level", [
+    ("인증번호 123456을 입력해주세요. 타인에게 알려주지 마세요", "safe"),
+    ("인증번호는 보내지 마세요. 직접 입력하세요", "caution"),
+    ("질병관리청 발표에 관한 기사입니다", "safe"),
+    ("질병관리청 예방접종 안내 https://www.kdca.go.kr/", "caution"),
+])
+def test_normal_notice_levels_at_twenty_point_threshold(text, expected_level):
+    # 주의 기준 20점에서는 기존 신호 25점도 경고하지만, 새 전달 요구로 오인하면 안 된다.
+    result = analyze_message(text, RULES)
+    assert result["level"] == expected_level
+    assert all(s["rule_id"] != "otp_forward_request" for s in result["signals"])
+
+
+@pytest.mark.parametrize("text", [
+    "https : / / bit.ly/abc",
+    "😀 https:// bit . ly/abc 다음 문장",
+    "건/강/검/진 https:/ /bit.ly/abc",
+])
+def test_normalized_url_match_maps_to_original(text):
+    result = analyze_message(text, RULES)
+    assert result["level"] != "safe"
+    signal = next(s for s in result["signals"] if s["rule_id"] == "short_url")
+    assert text[signal["start"]:signal["end"]] == signal["detail"]
+    assert "bit.ly" in normalize(signal["detail"])[0] or "bit . ly" in signal["detail"]
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("blogspot。com", "blogspot.com"),
+    ("blogspot｡com", "blogspot.com"),
+    ("캬톡 문의", "카톡 문의"),
+    ("까톡 약속", "카톡 약속"),
+    ("땔래:abcd1234", "텔레그램:abcd1234"),
+    ("사E트 안내", "사이트 안내"),
+])
+def test_common_alias_normalization(text, expected):
+    normalized, index = normalize(text)
+    assert normalized == expected
+    assert len(normalized) == len(index)
+    assert index == sorted(index)
+    assert all(0 <= pos < len(text) for pos in index)
+
+
+@pytest.mark.parametrize("text, rule_id", [
+    ("선톡 가입 문의만 해도 햄버거 세트 드려요", "signup_reward"),
+    ("하루 2o만 이상 날마다 지급 땔래 상담", "high_pay_recruit"),
+    ("[국제발신] 아마존 해외결제 본인 요청 아닐경우 소비자문의:02-0000-0000", "overseas_payment_contact"),
+])
+def test_behavior_combinations(text, rule_id):
+    result = analyze_message(text, RULES)
+    assert result["level"] != "safe"
+    assert any(s["rule_id"] == rule_id for s in result["signals"])
+    for signal in result["signals"]:
+        assert text[signal["start"]:signal["end"]] == signal["detail"]
+
+
+@pytest.mark.parametrize("text, absent_rule", [
+    ("카톡으로 치킨 주문 이야기하자", "signup_reward"),
+    ("가입 방법은 고객센터에 문의하세요", "signup_reward"),
+    ("하루 20만원 날마다 지급 이메일로 지원", "high_pay_recruit"),
+    ("하루 2o만 카톡 상담", "high_pay_recruit"),
+    ("아마존 해외결제 정상 승인 완료", "overseas_payment_contact"),
+    ("본인 요청이 아닐 경우 공식 앱에서 확인하세요", "overseas_payment_contact"),
+])
+def test_partial_combinations_do_not_add_signal(text, absent_rule):
+    result = analyze_message(text, RULES)
+    assert all(s["rule_id"] != absent_rule for s in result["signals"])
+
+
+def test_expanded_alias_keeps_original_contact_highlight():
+    text = "😀 땔래:abcd1234"
+    result = analyze_message(text, RULES)
+    signal = next(s for s in result["signals"] if s["rule_id"] == "messenger_contact")
+    assert signal["detail"] == "땔래:abcd1234"
+    assert text[signal["start"]:signal["end"]] == signal["detail"]

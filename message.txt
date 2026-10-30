@@ -1,0 +1,73 @@
+작업 지시서 A: 발신 패널 (악성 사용자 쪽)
+이 파일을 AI(Claude Code, Codex, Cursor 등)에게 통째로 주고 "이 지시서대로 작업해 줘"라고 하세요. 짝꿍 문서: docs/TASK_B_phone.md (수신 폰 화면). 두 사람은 서로 다른 파일만 고칩니다.
+
+0. 시작 전에 AI가 할 일 (필수)
+아래 문서를 먼저 읽고 그 규칙을 따릅니다.
+AGENTS.md, GIT_CONVENTION.md, .github/pull_request_template.md, docs/API.md
+git status, git branch로 현재 브랜치를 확인합니다. main, dev라면 멈추고 사용자에게 알립니다.
+프론트 코드는 origin/feature/frontend-simulator 브랜치에 있습니다. 기존 폴더 구조와 이름 규칙을 먼저 읽고 그대로 따릅니다. (git fetch origin 후 해당 브랜치의 frontend/를 확인)
+작업 브랜치 이름은 feature/sender-panel입니다. 최신 dev에서 만듭니다.
+모르는 것(없는 함수, 없는 API)은 추측하지 말고 사용자에게 묻습니다.
+1. 프로젝트 배경
+스팸 문자 탐지 데모입니다. 시연 영상은 웹 화면 한 개에서 찍습니다.
+
+악성 사용자(이 지시서의 담당): 웹에서 문자를 직접 입력해서 보냅니다.
+일반 사용자(B 담당): 폰 모양 화면에서 문자를 받고, 위험하면 경고 알림이 자동으로 뜹니다.
+화면은 좌우로 나뉩니다. 왼쪽이 발신 패널(내 담당), 오른쪽이 폰 화면(B 담당)입니다.
+
+서버와 API는 바꾸지 않습니다. 기존 POST /simulate/incoming만 씁니다. 요청·응답 형식은 docs/API.md가 기준입니다.
+
+2. 공용 약속 (B와 반드시 같아야 함, 바꾸려면 둘이 먼저 합의)
+수신함에 쌓이는 문자 한 건의 모양입니다.
+
+{
+  id,            // 프론트에서 만든 고유값 (문자열)
+  sender,        // 발신번호 문자열 (최대 50자, 표시용)
+  text,          // 문자 원문
+  receivedAt,    // 도착 시각 (Date.now() 숫자)
+  result: {      // /simulate/incoming 응답을 그대로 담음
+    result_id,
+    level,       // "safe" | "caution" | "danger"
+    category,
+    notified,    // boolean
+    notification // { title, body, url } 또는 null
+  }
+}
+A는 이 모양으로 수신함에 문자를 추가하고, B는 그것을 읽어서 그립니다.
+수신함 상태는 inbox 배열 + addMessage(message) 함수로 공유합니다. 상태를 어디에 둘지(상위 컴포넌트, Context, store)는 기존 프론트 구조를 보고 정하되, 정한 내용을 B에게 알려야 합니다.
+이 약속과 상태 파일은 A가 먼저 만들어 feature/sender-panel에 올리고, B가 가져가 씁니다.
+3. 내가 만들 것
+#	기능	완료 기준
+A1	화면 뼈대: 좌(발신) / 우(폰 자리) 2분할	두 영역이 보이고, 좁은 화면에서도 깨지지 않음. 폰 자리는 B 컴포넌트가 들어갈 빈 칸만 둠
+A2	발신 패널: 샘플 버튼, 입력창, 글자수, 발신번호 입력	샘플 클릭 시 입력창에 채워짐 / 2000자 제한 / 빈 값·공백만 있는 값은 보내기 불가
+A3	보내기 연동: POST /simulate/incoming 호출 후 응답을 수신함에 추가	보내면 inbox에 위 모양의 문자 한 건이 쌓임. 발신 쪽 화면에는 분석 결과(level 등)를 보여주지 않고 "발송됨"만 표시
+A4	오류·대기 처리	요청 중 버튼 비활성, 서버가 꺼져 있으면 "전송 실패" 안내가 뜨고 화면이 멈추지 않음
+A5	보안 점검(내 쪽)	입력창과 발신번호에 <script>, <img src=x onerror=alert(1)>를 넣어도 코드가 실행되지 않고 글자로만 보임
+시간 목표: 약 2시간 10분. (끝나면 B의 보안 점검·하이라이트 점검을 도울 수 있음)
+
+호출 규칙
+프론트는 /api/...로 호출합니다. (/api/simulate/incoming → 백엔드 /simulate/incoming, Vite 프록시가 /api를 뗌)
+요청: { "text": "...", "sender": "010-..." } (sender는 선택)
+샘플 목록은 GET /api/samples를 쓰되, 아직 백엔드가 없으면 기존 mocks/sample.js의 목 데이터로 먼저 개발합니다. (API 응답 필드 id, label, sender, text)
+4. 건드리지 않는 것
+백엔드 코드, docs/API.md의 엔드포인트와 형식 (바꿔야 하면 먼저 사용자에게 알림)
+B 담당 파일: 폰 화면, 경고 배너, 결과 화면, 하이라이트
+공통 파일(라우터, 설정, 공용 컴포넌트)을 고쳐야 하면 먼저 사용자에게 알립니다.
+요청과 상관없는 이름 변경, 포맷 일괄 변경, 파일 이동
+5. 끝내기 전에 AI가 직접 확인할 것
+앱이 실제로 뜨고, 샘플을 보냈을 때 inbox에 문자가 쌓이는지
+빌드 명령 실행 결과에 오류가 없는지, 콘솔에 새 에러·경고가 없는지
+서버를 껐을 때 "전송 실패"가 뜨는지
+git diff에 디버깅 코드, .env, 키, 토큰이 섞이지 않았는지
+git fetch origin && git merge --no-commit --no-ff origin/dev 후 git merge --abort로 충돌 여부만 확인 (충돌 시 임의로 해결하지 말고 어느 파일의 어느 부분인지 알림)
+6. Git 규칙 요약
+브랜치: feature/sender-panel에서만 작업합니다. main, dev에 직접 commit·push하지 않습니다.
+커밋: 타입: 한 줄 설명 (예: feat: 발신 패널 추가). 한 가지 일 단위로 나눠 커밋하고, git add . 대신 파일을 지정합니다.
+push는 내 브랜치에만, --force는 쓰지 않습니다.
+PR은 base dev, 본문은 .github/pull_request_template.md 양식대로 채우고, 확인하지 않은 체크는 비워 둡니다.
+사용자가 요청하기 전에는 커밋·push·PR을 하지 않습니다.
+7. 마지막 보고 형식
+바꾼 파일과 각각 무엇을 바꿨는지
+확인한 것 (실행, 빌드, 충돌 검사 결과)
+확인하지 못한 것과 걱정되는 부분
+B가 알아야 할 것 (수신함 상태를 어디에 두었는지, addMessage 사용법)

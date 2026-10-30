@@ -6,11 +6,12 @@ from typing import Literal
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 import store
-from analyzer import analyze_message, load_rules
+from analyzer import load_rules
+from message_model import analyze_with_model, load_model
 from notification import build_notification
 from push import send_to_all
 from push_routes import router as push_router
@@ -24,12 +25,20 @@ logger = logging.getLogger(__name__)
 
 # 규칙은 서버가 켜질 때 한 번만 읽는다. 잘못된 규칙은 건너뛰고 경고만 남긴다.
 RULES, RULE_WARNINGS = load_rules(RULES_PATH)
+MODEL = load_model()
 for warning in RULE_WARNINGS:
     logger.warning("규칙 건너뜀: %s", warning)
 
+
+class UTF8JSONResponse(JSONResponse):
+    # charset이 없으면 브라우저 주소창에서 열 때 한글을 EUC-KR로 추측해 깨져 보인다.
+    media_type = "application/json; charset=utf-8"
+
+
 app = FastAPI(
+    default_response_class=UTF8JSONResponse,
     title="스팸 문자 검사 API",
-    description="문자를 입력하고 검사 결과를 확인하세요. rules.yaml 규칙으로 채점합니다.",
+    description="학습 모델로 점수·등급을 판정하고, rules.yaml에서 발견한 표현을 참고 안내합니다. 점수는 확률이 아닙니다.",
     docs_url=None,
 )
 app.add_middleware(
@@ -93,9 +102,9 @@ class CheckRequest(BaseModel):
 
 
 class CheckResponse(BaseModel):
-    score: int = Field(ge=0, le=100, title="스팸 점수", description="0~100점", examples=[50])
+    score: int = Field(ge=0, le=100, title="스팸 점수", description="0~100 모델 판정 점수이며 사기 확률이 아닙니다.", examples=[50])
     level: Literal["안전", "주의", "위험"] = Field(title="위험 등급", examples=["주의"])
-    reasons: list[str] = Field(title="의심 근거", description="점수를 올린 의심 단어 목록", examples=[[]])
+    reasons: list[str] = Field(title="의심 근거", description="모델 판정 안내와 규칙에서 발견한 참고 표현 목록", examples=[[]])
 
 
 @app.post(
@@ -106,7 +115,7 @@ class CheckResponse(BaseModel):
     responses={422: {"description": "입력 오류: text 누락, 빈 값, 공백만 있는 값 또는 2000자 초과"}},
 )
 def check(req: CheckRequest) -> CheckResponse:
-    result = analyze_message(req.text, RULES)
+    result = analyze_with_model(req.text, RULES, MODEL)
     reasons = list(dict.fromkeys(s["detail"] for s in result["signals"]))
     return CheckResponse(score=result["score"], level=LEVEL_KO[result["level"]], reasons=reasons)
 
@@ -117,14 +126,14 @@ class IncomingRequest(CheckRequest):
 
 @app.post("/analyze", tags=["문자 검사"], summary="문자 분석 (저장·알림 없음)")
 def analyze_text(req: CheckRequest) -> dict:
-    result = analyze_message(req.text, RULES)
+    result = analyze_with_model(req.text, RULES, MODEL)
     # 분석 전용 API라 원문을 되돌려 주지 않는다. (docs/API.md의 Result)
     return {key: value for key, value in result.items() if key != "text"}
 
 
 @app.post("/simulate/incoming", tags=["시뮬레이터"], summary="문자 수신 시뮬레이션(분석→보관→알림 판단)")
 def simulate_incoming(req: IncomingRequest, background: BackgroundTasks) -> dict:
-    result = analyze_message(req.text, RULES)
+    result = analyze_with_model(req.text, RULES, MODEL)
     result_id = store.save(result)
     notification = build_notification(result, result_id)
     if notification:
