@@ -7,6 +7,22 @@ AI 코딩 도구(Claude Code, Codex, Cursor 등)가 이 레포에서 작업할 �
 > PR을 만들 때는 `.github/pull_request_template.md`를 읽고 본문을 그 양식대로 채웁니다.
 > (아래 "Git 작업 시 자동 적용 규칙" 참고. 사용자가 따로 요청하지 않아도 항상 적용합니다.)
 
+## 🚦 가장 먼저 지킬 것 (모든 팀원, 모든 AI 공통)
+
+**팀원은 각자 `dev`에서 자기 브랜치를 새로 만들어 작업하고, `dev`로 PR을 올립니다.** `main`, `dev`에서는 직접 작업하지 않습니다.
+
+1. **작업을 시작하기 전에** 현재 브랜치를 확인합니다 (`git branch --show-current`). `main`이나 `dev`라면 코드를 고치지 말고, 먼저 내 브랜치를 만듭니다.
+   ```bash
+   git fetch origin
+   git switch -c feature/기능명 origin/dev
+   ```
+2. **내 브랜치에만 push**합니다. 브랜치 이름을 꼭 적습니다: `git push origin feature/기능명` (그냥 `git push`는 쓰지 않습니다)
+3. 올릴 때는 **base가 `dev`인 PR**을 만듭니다. `main`으로 올리지 않습니다.
+4. **다른 사람의 브랜치에는 push하지 않습니다.** 팀원마다 자기 브랜치 하나씩 씁니다.
+5. 내 브랜치의 이 문서가 오래됐을 수 있습니다. (예: "승인 필수"라고 적혀 있거나 `GIT_CONVENTION.md`가 없음) 그럴 때는 작업 전에 먼저 `git fetch origin && git merge origin/dev`로 최신 규칙을 받습니다.
+
+AI는 사용자가 "커밋해줘", "올려줘", "PR 만들어줘", "merge해줘"라고 하면 따로 설명을 듣지 않아도 위 규칙과 아래 "Git 작업 시 자동 적용 규칙"을 그대로 실행합니다. 사용자가 `main`이나 `dev`에서 바로 커밋·push하려고 하면 **멈추고** 위 1번을 먼저 안내합니다.
+
 ## 프로젝트 소개
 
 - 이름: [프로젝트 이름]

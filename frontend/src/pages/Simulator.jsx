@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { samples as mockSamples } from '../mocks/sample'
 import NotificationBanner from '../components/NotificationBanner'
+import './Simulator.css'
 
 export default function Simulator() {
   const navigate = useNavigate()
@@ -41,7 +42,7 @@ export default function Simulator() {
   }
 
   return (
-    <main className="page">
+    <main className="sim">
       {banner && (
         <NotificationBanner
           level={banner.level}
@@ -50,34 +51,46 @@ export default function Simulator() {
           onClose={closeBanner}
         />
       )}
-      <h1 className="title">문자 수신 시뮬레이터</h1>
-      <p className="muted">샘플을 고르거나 직접 입력한 뒤 문자를 받아 보세요.</p>
+      <header className="sim__head">
+        <h1 className="sim__title">문자 수신 시뮬레이터</h1>
+        <p className="sim__sub">문자를 받으면 알림이 뜨고, 알림을 누르면 결과 화면이 열려요.</p>
+      </header>
 
-      <div className="samples">
+      <div className="sim__samples" role="group" aria-label="샘플 문자">
         {samples.map((s) => (
-          <button key={s.id || s.label} type="button" className="chip" onClick={() => setText(s.text)}>
+          <button
+            key={s.id || s.label}
+            type="button"
+            className="sim__chip"
+            aria-pressed={text === s.text}
+            onClick={() => setText(s.text)}
+          >
             {s.label}
           </button>
         ))}
       </div>
 
-      <label htmlFor="msg" className="sr-only">문자 내용</label>
-      <textarea
-        id="msg"
-        value={text}
-        maxLength={2000}
-        rows={6}
-        placeholder="문자 내용을 입력하세요"
-        onChange={(e) => setText(e.target.value)}
-      />
-      <div className="count">{text.length}/2000</div>
+      <section className="sim__card">
+        <label htmlFor="msg" className="sim__label">받을 문자</label>
+        <textarea
+          id="msg"
+          className="sim__input"
+          value={text}
+          maxLength={2000}
+          rows={6}
+          placeholder="샘플을 고르거나 문자 내용을 입력하세요"
+          onChange={(e) => setText(e.target.value)}
+        />
+        <div className="sim__count">{text.length}/2000</div>
+      </section>
 
-      <button type="button" className="primary" disabled={loading || !text.trim()} onClick={receive}>
+      <button type="button" className="sim__receive" disabled={loading || !text.trim()} onClick={receive}>
         {loading ? '분석 중…' : '문자 받기'}
       </button>
 
-      {error && <p className="error" role="alert">{error}</p>}
-      {safeNotice && <p className="safe-notice">✅ 위험 신호가 발견되지 않았어요</p>}
+      {error && <p className="sim__error" role="alert">{error}</p>}
+      {safeNotice && <p className="sim__safe" role="status">위험 신호가 발견되지 않아 알림을 보내지 않았어요</p>}
+      {banner && <p className="sim__hint">위에 뜬 알림을 눌러 결과를 확인해 보세요</p>}
     </main>
   )
 }
