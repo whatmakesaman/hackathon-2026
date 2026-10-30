@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Literal
 
@@ -20,6 +21,11 @@ ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 MODEL = os.environ.get("AI_URL_MODEL", "claude-haiku-5-5")
 TIMEOUT_SECONDS = 8.0
 MAX_URLS = 5
+BARE_LINK_RE = re.compile(
+    r"(?<![\w.@/])(?:[a-z0-9-]+\.)+(?:com|net|org|kr|co|me|io|info|biz|xyz|top|shop|vip|cc|site"
+    r"|online|click|link|live|club|ly|gd|su|do|la|at|gl|gy|mba)(?![a-z0-9])(?:/\S*)?",
+    re.I,
+)
 
 SYSTEM_PROMPT = """너는 한국 휴대폰 문자(SMS) 속 링크가 스미싱(문자 사기) 링크인지 판정하는 보안 분석가다.
 링크에 접속할 수 없으니 주소의 겉모양과 문자 맥락만 보고 판단한다.
@@ -48,10 +54,13 @@ def _load_api_key() -> str:
 
 
 def find_urls(text: str) -> list[dict]:
-    return [
-        {"url": m.group(0), "start": m.start(), "end": m.end()}
-        for m in URL_RE.finditer(text)
-    ][:MAX_URLS]
+    # analyzer의 URL_RE는 http 없는 단축 URL(bit.ly/xx)을 놓쳐서 맨 도메인 패턴을 함께 본다.
+    found = []
+    for m in sorted([*URL_RE.finditer(text), *BARE_LINK_RE.finditer(text)], key=lambda m: m.start()):
+        if found and m.start() < found[-1]["end"]:
+            continue
+        found.append({"url": m.group(0), "start": m.start(), "end": m.end()})
+    return found[:MAX_URLS]
 
 
 def check_urls(text: str) -> dict | None:

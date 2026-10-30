@@ -21,6 +21,11 @@ def test_find_urls_gives_position():
     assert TEXT[found[0]["start"]:found[0]["end"]] == found[0]["url"]
 
 
+def test_find_urls_catches_bare_short_link_once():
+    text = "택배 확인 bit.ly/3xYz12 그리고 http://bit.ly/abc"
+    assert [u["url"] for u in find_urls(text)] == ["bit.ly/3xYz12", "http://bit.ly/abc"]
+
+
 def test_check_urls_skips_without_key(monkeypatch):
     monkeypatch.setattr(url_ai, "_load_api_key", lambda: "")
     assert check_urls(TEXT) is None
