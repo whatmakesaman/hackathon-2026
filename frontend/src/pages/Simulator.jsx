@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { samples as mockSamples } from '../mocks/sample'
 import PhoneInbox from '../components/PhoneInbox'
+import './Simulator.css'
 
 export default function Simulator({ inbox, addMessage }) {
   // 서버 샘플(GET /samples)을 못 받아도 시연할 수 있게 목 샘플로 먼저 채워 둔다.
@@ -47,60 +48,73 @@ export default function Simulator({ inbox, addMessage }) {
   }
 
   return (
-    <main style={{ maxWidth: 1100, margin: '0 auto', padding: 16, display: 'flex', flexWrap: 'wrap', gap: 24 }}>
-      <form onSubmit={send} className="page card" style={{ flex: '1 1 320px', minWidth: 0, maxWidth: '100%', margin: 0 }}>
-      <h1 className="title">문자 발신 패널</h1>
-      <p className="muted">샘플을 고르거나 직접 입력한 뒤 문자를 보내세요.</p>
+    <main className="sim sim--split">
+      <form onSubmit={send} className="sim__panel">
+        <header className="sim__head">
+          <h1 className="sim__title">문자 발신 패널</h1>
+          <p className="sim__sub">샘플을 고르거나 직접 입력한 뒤 문자를 보내세요. 오른쪽 폰에 문자가 도착해요.</p>
+        </header>
 
-      <div className="samples">
-        {samples.map((s) => (
-          <button key={s.id || s.label} type="button" className="chip" disabled={loading} onClick={() => {
-            setText(Array.from(s.text).slice(0, 2000).join(''))
-            setSender(Array.from(s.sender || '').slice(0, 50).join(''))
-            setSent(false)
-            setError('')
-          }}>
-            {s.label}
-          </button>
-        ))}
-      </div>
+        <div className="sim__samples" role="group" aria-label="샘플 문자">
+          {samples.map((s) => (
+            <button
+              key={s.id || s.label}
+              type="button"
+              className="sim__chip"
+              aria-pressed={text === s.text}
+              disabled={loading}
+              onClick={() => {
+                setText(Array.from(s.text).slice(0, 2000).join(''))
+                setSender(Array.from(s.sender || '').slice(0, 50).join(''))
+                setSent(false)
+                setError('')
+              }}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
 
-      <label htmlFor="sender">발신번호 (선택, 최대 50자)</label>
-      <input
-        id="sender"
-        type="text"
-        value={sender}
-        disabled={loading}
-        placeholder="010-1234-5678"
-        style={{ width: '100%', padding: 12, border: '1px solid var(--line)', borderRadius: 12, font: 'inherit' }}
-        onChange={(event) => {
-          setSender(Array.from(event.target.value).slice(0, 50).join(''))
-          setSent(false)
-        }}
-      />
-      <label htmlFor="msg">문자 내용</label>
-      <textarea
-        id="msg"
-        value={text}
-        disabled={loading}
-        aria-describedby="message-count"
-        rows={6}
-        placeholder="문자 내용을 입력하세요"
-        onChange={(event) => {
-          setText(Array.from(event.target.value).slice(0, 2000).join(''))
-          setSent(false)
-        }}
-      />
-      <div id="message-count" className="count">{textLength}/2000</div>
+        <section className="sim__card">
+          <label htmlFor="sender" className="sim__label">발신번호 (선택, 최대 50자)</label>
+          <input
+            id="sender"
+            type="text"
+            className="sim__field"
+            value={sender}
+            disabled={loading}
+            placeholder="010-1234-5678"
+            onChange={(event) => {
+              setSender(Array.from(event.target.value).slice(0, 50).join(''))
+              setSent(false)
+            }}
+          />
+          <label htmlFor="msg" className="sim__label">문자 내용</label>
+          <textarea
+            id="msg"
+            className="sim__input"
+            value={text}
+            disabled={loading}
+            aria-describedby="message-count"
+            rows={6}
+            placeholder="샘플을 고르거나 문자 내용을 입력하세요"
+            onChange={(event) => {
+              setText(Array.from(event.target.value).slice(0, 2000).join(''))
+              setSent(false)
+            }}
+          />
+          <div id="message-count" className="sim__count">{textLength}/2000</div>
+        </section>
 
-      <button type="submit" className="primary" disabled={loading || !text.trim()}>
-        {loading ? '전송 중…' : '문자 보내기'}
-      </button>
+        <button type="submit" className="sim__receive" disabled={loading || !text.trim()}>
+          {loading ? '전송 중…' : '문자 보내기'}
+        </button>
 
-      {error && <p className="error" role="alert">{error}</p>}
-      {sent && <p className="safe-notice" role="status">발송됨</p>}
+        {error && <p className="sim__error" role="alert">{error}</p>}
+        {sent && <p className="sim__safe" role="status">발송됨 · 오른쪽 폰 화면을 확인하세요</p>}
       </form>
-      <aside aria-label="수신 화면" style={{ flex: '1 1 320px', minWidth: 0 }}>
+
+      <aside className="sim__phone" aria-label="수신 화면">
         <PhoneInbox inbox={inbox} />
       </aside>
     </main>
