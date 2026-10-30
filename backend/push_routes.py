@@ -1,5 +1,7 @@
 """D: 푸시 관련 라우터 — B가 main.py에서 include_router()로 등록"""
 import os
+from typing import Optional
+
 from fastapi import APIRouter
 from pydantic import BaseModel
 
@@ -11,7 +13,8 @@ router = APIRouter(prefix="/push", tags=["push"])
 class SubscriptionRequest(BaseModel):
     endpoint: str
     keys: dict
-    expirationTime: float | None = None
+    # pydantic이 실행 중에 타입을 해석하므로 Python 3.9에서는 `float | None` 대신 Optional을 쓴다.
+    expirationTime: Optional[float] = None
 
 
 @router.get("/vapid-public-key")
