@@ -1,6 +1,20 @@
 # Git 컨벤션
 
-> 12시간 해커톤용 최소 규칙입니다. 헷갈리면 이 문서를 먼저 보고, 그래도 막히면 팀 채널에 바로 물어보세요.
+> 12시간 해커톤용 최소 규칙입니다. 사람과 AI 모두 이 문서를 **유일한 기준**으로 따릅니다.
+> 헷갈리면 이 문서를 먼저 보고, 그래도 막히면 팀 채널에 바로 물어보세요.
+
+## 한눈에 보기
+
+| 항목 | 규칙 |
+|---|---|
+| 브랜치 | `main`(제출) / `dev`(통합) / `타입/기능명`(내 작업) |
+| 내 작업 시작 | 항상 **최신 `dev`** 에서 새 브랜치를 만든다 |
+| 직접 push | `main`, `dev`는 **금지**. 내 브랜치에만 push |
+| 커밋 메시지 | `타입: 한 줄 설명` (한국어, 이모지 없음) |
+| PR | base는 **`dev`**, 작게, 템플릿대로 작성 |
+| merge | **승인 없이 본인이 merge 가능**. 단, 아래 "merge 전 확인"을 모두 통과해야 한다 |
+| `dev` → `main` | **팀장만**, 제출 직전에만 |
+| 금지 | `--force`, 비밀 정보 커밋, 남의 브랜치에 push |
 
 ## 1. 브랜치 구조
 
@@ -8,23 +22,31 @@
 |---|---|---|
 | `main` | 제출·시연용. 항상 실행되는 상태 유지 | 금지 |
 | `dev` | 기능을 합치는 통합 브랜치 | 금지 |
-| `feature/*` | 각자 기능을 개발하는 브랜치 | 가능 |
+| `타입/기능명` | 각자 작업하는 브랜치 | 가능 |
 
 ```
-main  ──────────────●───────────────●──  (제출 직전에만 merge)
+main  ──────────────●───────────────●──  (제출 직전에만 merge, 팀장)
                     ↑               ↑
 dev   ──●────●──────●────●──────────●──
          ↑    ↑           ↑
-feature/a    feature/b    feature/c
+feature/a    feature/b    fix/c
 ```
 
 ### 브랜치 이름 규칙
-`타입/기능명` 형식으로, 영어 소문자와 하이픈(`-`)만 씁니다.
 
-- `feature/upload-page`: 새 기능
-- `fix/parse-error`: 버그 수정
-- `docs/readme`: 문서 작업
-- `design/dashboard-ui`: 화면 디자인 작업
+`타입/기능명` 형식입니다. **영어 소문자, 숫자, 하이픈(`-`)만** 씁니다. (한글, 공백, `#`, 대문자 금지)
+
+| 타입 | 용도 | 예시 |
+|---|---|---|
+| `feature/` | 새 기능 | `feature/upload-page` |
+| `fix/` | 버그 수정 | `fix/parse-error` |
+| `docs/` | 문서 작업 | `docs/readme` |
+| `design/` | 화면 디자인 작업 | `design/result-card` |
+| `refactor/` | 코드 정리 (기능 변화 없음) | `refactor/analyzer-split` |
+| `chore/` | 설정, 패키지 등 기타 | `chore/eslint-config` |
+
+- 이름만 쓰는 브랜치(`dageon-lee`)나 `analyzer/#1`처럼 타입이 없거나 `#`이 들어간 이름은 쓰지 않습니다.
+- **브랜치 하나에는 일 하나**만 합니다. 기능이 둘이면 브랜치도 둘입니다.
 
 ## 2. 작업 흐름
 
@@ -32,10 +54,11 @@ feature/a    feature/b    feature/c
 `dev`를 최신으로 받은 뒤 내 브랜치를 만듭니다.
 
 ```bash
-git checkout dev
-git pull origin dev
-git checkout -b feature/upload-page
+git fetch origin
+git switch -c feature/upload-page origin/dev
 ```
+
+> ⚠️ 이렇게 만들면 브랜치가 `origin/dev`를 추적하게 됩니다. **`git push`만 치지 말고 반드시 브랜치 이름을 적어서** push하세요. (아래 참고)
 
 ### 이미 작업 중인 브랜치가 있을 때
 PR이 아직 merge되지 않았다면 새 브랜치를 만들지 않고 **내 브랜치에서 이어서** 작업합니다.
@@ -46,21 +69,27 @@ PR이 아직 merge되지 않았다면 새 브랜치를 만들지 않고 **내 �
 
 ### 작업하고 push하기
 ```bash
-git add .
+git status                                   # 무엇이 바뀌었는지 확인
+git add backend/analyzer.py                  # 파일을 지정해서 추가 (git add . 는 쓰지 않는다)
 git commit -m "feat: 업로드 화면 추가"
-git push origin feature/upload-page
+git push origin feature/upload-page          # 브랜치 이름을 반드시 적는다
 ```
-push한 뒤 GitHub에서 `dev`로 PR을 엽니다.
 
-### PR을 올리기 전
-`dev`에 새 내용이 들어왔다면 내 브랜치로 가져와서 실행되는지 확인합니다.
+- `git add .`, `git add -A`는 쓰지 않습니다. `.env`, `.DS_Store`, `node_modules/`가 딸려 올라갈 수 있습니다.
+- push한 뒤 GitHub에서 `dev`로 PR을 엽니다.
+
+### PR을 올리기 전 (dev 최신 반영)
+`dev`에 새 내용이 들어왔다면 **내 브랜치로 합쳐서** 실행되는지 확인합니다. (`rebase`는 쓰지 않습니다)
 
 ```bash
-git pull origin dev
+git fetch origin
+git merge origin/dev
 ```
 
+충돌이 나면 **상대방 코드를 지우는 쪽으로 해결하지 않습니다.** 양쪽 코드를 모두 살릴 수 없으면 멈추고 팀 채널이나 사용자에게 물어봅니다.
+
 ### 로컬 `dev`는 직접 건드리지 않습니다
-로컬 `dev`는 최신 내용을 받아오는 용도로만 씁니다. `dev`에서 직접 작업하거나 커밋하지 않고, 작업은 항상 내 브랜치에서 합니다.
+로컬 `dev`는 최신 내용을 받아오는 용도로만 씁니다. `dev`에서 직접 작업하거나 커밋하지 않습니다.
 
 ## 3. 커밋 규칙
 
@@ -68,6 +97,8 @@ git pull origin dev
 ```
 타입: 한 줄 설명
 ```
+- **한국어**로 쓰고, **이모지나 `✨ Feat :` 같은 장식은 붙이지 않습니다.**
+- 설명은 **무엇을 했는지** 한 줄로 씁니다. ("수정", "작업" 같은 한 단어 금지)
 
 ### 타입
 | 타입 | 용도 | 예시 |
@@ -77,22 +108,22 @@ git pull origin dev
 | `docs` | 문서 수정 | `docs: README 실행 방법 추가` |
 | `style` | 화면·스타일 변경 (기능 변화 없음) | `style: 카드 여백 조정` |
 | `refactor` | 코드 정리 (기능 변화 없음) | `refactor: 파싱 함수 분리` |
+| `test` | 테스트 추가·수정 | `test: 택배 사칭 문자 케이스 추가` |
 | `chore` | 설정, 패키지 등 기타 | `chore: eslint 설정 추가` |
 
 ### 원칙
 - 커밋 하나에는 **한 가지 일**만 담습니다.
-- 설명은 **무엇을 했는지** 한 줄로 씁니다. ("수정", "작업" 같은 한 단어는 금지)
 - 작업 중간에도 **자주 커밋**하세요. 크게 한 번에 하는 것보다 안전합니다.
 
 ## 4. Push 규칙
 
-- push는 **내 feature 브랜치에만** 합니다.
-- `main`, `dev`는 직접 push하지 않고, **PR을 올려 승인(Approve)을 받은 뒤 merge하는 방식으로만** 반영합니다.
+- push는 **내 브랜치에만** 합니다. 명령은 `git push origin <내 브랜치 이름>` 형태로 씁니다.
+- `main`, `dev`는 직접 push하지 않고, **PR을 거쳐서만** 반영합니다.
 - push 전에 **내 컴퓨터에서 실행이 되는지** 확인합니다.
 - `git push --force`는 **절대 사용하지 않습니다.**
 - 아래 파일은 **절대 커밋하지 않습니다.** (`.gitignore`에 등록되어 있습니다)
   - `.env`, API 키, 비밀번호, 토큰
-  - `node_modules/`, 빌드 결과물
+  - `node_modules/`, `.venv/`, 빌드 결과물
 - 키를 실수로 올렸다면 **즉시 팀장에게 알립니다.** 파일을 지워도 기록에 남기 때문에 키를 폐기하고 재발급해야 합니다.
 
 ## 5. PR(Pull Request) 규칙
@@ -100,35 +131,51 @@ git pull origin dev
 ### 올릴 때
 - **base 브랜치는 `dev`** 입니다. (`main`으로 올리지 않습니다)
 - 제목은 커밋과 같은 형식으로 씁니다. 예: `feat: 업로드 화면 추가`
-- 본문에는 아래 세 가지를 적습니다.
-  1. **무엇을** 했는지
-  2. **어떻게 확인**하는지 (실행 방법, 스크린샷)
-  3. 리뷰어가 **특히 봐줬으면 하는 부분** (없으면 생략)
+- 본문은 `.github/pull_request_template.md` 양식을 그대로 채웁니다.
 - PR은 **작게** 올립니다. 한 PR에 기능 하나만 담습니다.
 - PR을 올리면 **팀 채널에 링크를 공유**합니다.
 
-### 리뷰할 때
-- 리뷰어는 **최소 1명**이며, 작성자 본인은 승인할 수 없습니다.
-- 해커톤이므로 코드 스타일은 따지지 않고 **아래 세 가지만** 확인합니다.
-  1. 내 컴퓨터에서 **실행이 되는가**
-  2. **비밀 정보**가 올라가 있지 않은가
-  3. 다른 기능을 **망가뜨리지 않는가**
-- 리뷰 요청을 받으면 **15분 안에** 확인합니다.
+### 리뷰 (선택)
+승인은 **필수가 아닙니다.** 다만 누군가 리뷰를 요청하면 **15분 안에** 아래 세 가지만 봅니다.
+
+1. 내 컴퓨터에서 **실행이 되는가**
+2. **비밀 정보**가 올라가 있지 않은가
+3. 다른 기능을 **망가뜨리지 않는가**
 
 ## 6. Merge 규칙
 
 | 방향 | 방식 | 누가 |
 |---|---|---|
-| `feature/*` → `dev` | **Squash and merge** | 승인을 받은 뒤 PR 작성자 |
-| `dev` → `main` | **Merge commit** | **팀장만** |
+| 내 브랜치 → `dev` | **Squash and merge** | PR 작성자 본인 (승인 불필요) |
+| `dev` → `main` | **Merge commit** | **팀장만** (제출 직전) |
 
-- 승인(Approve)이 **1개 이상** 있어야 merge할 수 있습니다.
-- merge한 뒤 팀원들은 각자 `git checkout dev && git pull origin dev`로 최신 상태를 받습니다.
+### merge 전 확인 (모두 통과해야 merge)
+
+승인이 없는 대신, 아래를 **직접 확인한 뒤에만** merge합니다.
+
+1. **CI가 통과**했다. (`gh pr checks <번호>` 또는 PR 화면의 초록 체크)
+2. **충돌이 없다.** (PR 화면에 "This branch has conflicts"가 없다)
+3. PR **본문 템플릿**을 채웠고, 체크 항목은 실제로 확인한 것만 체크했다.
+4. **팀 채널에 PR 링크를 공유**했다.
+5. 내 변경에 **비밀 정보나 `.DS_Store`** 같은 파일이 섞이지 않았다. (`git diff origin/dev --stat`)
+
+하나라도 어긋나면 merge하지 않고 먼저 고칩니다. CI가 실패했다면 **검사를 끄거나 테스트를 지우지 말고** 원인을 고칩니다.
+
+```bash
+gh pr merge <PR번호> --squash --delete-branch
+git switch dev && git pull origin dev    # 팀원 모두 merge 후 각자 최신 받기
+```
+
+### merge 직후
+- 로컬에서 `dev`를 최신으로 받습니다.
+- 이미 merge된 내 브랜치는 더 쓰지 않습니다. 새 작업은 새 브랜치로 시작합니다.
 
 ## 7. 하지 말아야 할 것
 
-- `main`, `dev`에 직접 push
-- `git push --force`
+- `main`, `dev`에 직접 commit·push
+- `git push --force`, `git reset --hard`, `rebase`, `commit --amend`
+- `git add .` / `git add -A`
 - `.env`나 API 키 커밋
-- 다른 사람이 작업 중인 브랜치에 몰래 push
-- 승인 없이 본인 PR을 merge
+- 다른 사람이 작업 중인 브랜치에 push
+- CI가 실패한 PR을 merge
+- `dev` → `main` merge (팀장 외)

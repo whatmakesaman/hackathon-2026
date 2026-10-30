@@ -1,0 +1,40 @@
+.result { max-width: 430px; margin: 0 auto; padding: 12px 16px 32px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box; }
+.result__loading { text-align: center; color: #666; padding: 48px 0; }
+
+.level-header { display: flex; align-items: center; gap: 10px; padding: 16px; border-radius: 14px; }
+.level-header__icon { font-size: 28px; }
+.level-header__body { flex: 1; min-width: 0; }
+.level-header__title { margin: 0; font-size: 20px; overflow-wrap: anywhere; }
+.level-header__category { font-weight: 600; }
+.level-header__score { font-size: 13px; opacity: 0.8; }
+
+.card { background: #fff; border: 1px solid #e5e5e5; border-radius: 14px; padding: 14px 16px; }
+.card__title { margin: 0 0 8px; font-size: 16px; }
+.card__empty { margin: 0; color: #555; }
+
+.highlighted { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; max-height: 40vh; overflow-y: auto; }
+.highlighted__hit { background: #ffe082; color: inherit; text-decoration: underline wavy #c62828; text-underline-offset: 3px; border-radius: 3px; padding: 0 1px; }
+
+.signals { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.signals__item { padding-bottom: 10px; border-bottom: 1px solid #eee; }
+.signals__item:last-child { border-bottom: 0; padding-bottom: 0; }
+.signals__head { display: flex; justify-content: space-between; }
+.signals__weight { color: #c62828; font-weight: 600; }
+.signals__detail { display: block; margin-top: 4px; font-size: 13px; color: #555; overflow-wrap: anywhere; }
+.signals__explain { margin: 4px 0 0; color: #333; }
+
+.advice { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+
+.clicked__summary { cursor: pointer; font-weight: 600; min-height: 44px; display: flex; align-items: center; }
+.clicked__list { margin: 4px 0 8px; padding-left: 20px; }
+.clicked__report { margin: 8px 0 0; font-size: 14px; color: #444; }
+
+.result__footer { text-align: center; color: #666; font-size: 13px; display: flex; flex-direction: column; gap: 12px; align-items: center; }
+.result__footer p { margin: 0; }
+
+.notice { text-align: center; padding: 48px 16px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.notice__icon { font-size: 40px; margin: 0; }
+.notice__text { font-size: 18px; margin: 0; }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 20px; border-radius: 10px; border: 0; background: #1a73e8; color: #fff; font-size: 15px; text-decoration: none; cursor: pointer; }
+.btn--ghost { background: #eee; color: #222; }
