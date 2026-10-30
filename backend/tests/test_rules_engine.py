@@ -1,3 +1,5 @@
+import pytest
+
 from pathlib import Path
 
 from analyzer import analyze_message, check_rules, load_rules, normalize
@@ -70,3 +72,58 @@ def test_잘못된_규칙은_건너뛰고_경고한다(tmp_path):
     rules, warnings = load_rules(bad)
     assert [r["id"] for r in rules["signals"]] == ["ok"]
     assert len(warnings) == 2
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("https:// bit.ly/abc", "https://bit.ly/abc"),
+    ("https:/ /example.com", "https://example.com"),
+    ("https://\nbit.ly/abc", "https://bit.ly/abc"),
+    ("https://example . com/login", "https://example.com/login"),
+    ("www.example . com", "www.example.com"),
+    ("https:// bit.ly/abc 다음 문장은 유지", "https://bit.ly/abc 다음 문장은 유지"),
+])
+def test_broken_url_normalization(text, expected):
+    normalized, index = normalize(text)
+    assert normalized == expected
+    assert "".join(text[i] for i in index) == expected
+
+
+@pytest.mark.parametrize("text, rule_id", [
+    ("https:/ /123.45.67.89/login", "short_url"),
+    ("https://bit . ly/abc", "short_url"),
+    ("인증번호 왔지? 그거 불러줘", "otp_forward_request"),
+    ("인증번호 받았으면\n그거 보내주세요", "otp_forward_request"),
+    ("[질병관리청COOV] 예방접종증명서 확인 https://ya.mba/test", "institution"),
+])
+def test_added_signal_and_original_positions(text, rule_id):
+    result = analyze_message(text, RULES)
+    assert result["level"] != "safe"
+    assert any(s["rule_id"] == rule_id for s in result["signals"])
+    for signal in result["signals"]:
+        assert text[signal["start"]:signal["end"]] == signal["detail"]
+
+
+@pytest.mark.parametrize("text, expected_level", [
+    ("인증번호 123456을 입력해주세요. 타인에게 알려주지 마세요", "safe"),
+    ("인증번호는 보내지 마세요. 직접 입력하세요", "caution"),
+    ("질병관리청 발표에 관한 기사입니다", "safe"),
+    ("질병관리청 예방접종 안내 https://www.kdca.go.kr/", "caution"),
+])
+def test_normal_notice_levels_at_twenty_point_threshold(text, expected_level):
+    # 주의 기준 20점에서는 기존 신호 25점도 경고하지만, 새 전달 요구로 오인하면 안 된다.
+    result = analyze_message(text, RULES)
+    assert result["level"] == expected_level
+    assert all(s["rule_id"] != "otp_forward_request" for s in result["signals"])
+
+
+@pytest.mark.parametrize("text", [
+    "https : / / bit.ly/abc",
+    "😀 https:// bit . ly/abc 다음 문장",
+    "건/강/검/진 https:/ /bit.ly/abc",
+])
+def test_normalized_url_match_maps_to_original(text):
+    result = analyze_message(text, RULES)
+    assert result["level"] != "safe"
+    signal = next(s for s in result["signals"] if s["rule_id"] == "short_url")
+    assert text[signal["start"]:signal["end"]] == signal["detail"]
+    assert "bit.ly" in normalize(signal["detail"])[0] or "bit . ly" in signal["detail"]

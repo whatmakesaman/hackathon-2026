@@ -166,7 +166,18 @@ def normalize(text):
         for out in unicodedata.normalize("NFKC", ch):
             chars.append(out)
             index.append(i)
-    return "".join(chars), index
+    normalized = "".join(chars)
+    # 주소 구분자 주변 공백만 제거해 뒤의 일반 문장과 붙지 않게 한다.
+    for pattern in (
+        r"\bhttps?\s*:\s*/\s*/\s*(?=[a-z0-9])",
+        r"\b(?:https?://|www\.)[a-z0-9-]+(?:\s*\.\s*[a-z0-9-]+)+",
+    ):
+        gaps = {i for match in re.finditer(pattern, normalized, re.I)
+                for i in range(match.start(), match.end()) if normalized[i].isspace()}
+        if gaps:
+            index = [pos for i, pos in enumerate(index) if i not in gaps]
+            normalized = "".join(ch for i, ch in enumerate(normalized) if i not in gaps)
+    return normalized, index
 
 
 def _find(pattern, text, normalized, index):
