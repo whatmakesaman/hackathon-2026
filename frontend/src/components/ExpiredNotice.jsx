@@ -1,7 +1,7 @@
 // 프론트 2 담당
 import { Link } from 'react-router-dom'
 
-export default function ExpiredNotice({ message = '결과가 만료되었어요 (10분 보관)', retry }) {
+export default function ExpiredNotice({ message = '시간이 지나 결과가 사라졌어요 (10분 보관)', retry }) {
   return (
     <section className="notice" role="alert">
       <p className="notice__icon" aria-hidden="true">⏰</p>
