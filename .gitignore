@@ -1,3 +1,21 @@
+# macOS
+.DS_Store
+
+# 비밀 정보
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+dist/
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
 /.venv
 /.idea
-*.md
