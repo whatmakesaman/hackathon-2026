@@ -118,14 +118,17 @@ def analyze_with_model(text, rules, model):
     if level == "safe":
         return {**reference, "score": score, "level": level, "category": SAFE_CATEGORY,
                 "signals": [], "advice": [], "if_clicked": []}
+    # 모델은 경고 여부만 결정한다. 등급은 규칙 근거로 나누고, 모델 단독 탐지도 주의로 남긴다.
+    score = max(rules["levels"]["caution"], reference["score"])
+    level = "danger" if score >= rules["levels"]["danger"] else "caution"
     category = reference["category"] if reference["category"] != SAFE_CATEGORY else OTHER_CATEGORY
     explanation = {
         "rule_id": "model_pattern", "type": "학습 패턴", "detail": "학습된 문자 패턴상 확인이 필요합니다.",
-        "weight": 0, "explain": "문자 조각의 통계로 판정했습니다. 아래 규칙 신호는 참고 정보이며 점수 합계가 아닙니다.",
+        "weight": 0, "explain": "모델이 의심 문자로 분류했습니다. 위험 신호 점수는 규칙 점수를 사용하며, 규칙 근거가 부족해도 최소 주의 점수로 경고합니다. 사기 확률은 아닙니다.",
         "start": None, "end": None,
     }
     signals = [explanation] + [
-        {**signal, "explain": "규칙 참고: " + signal["explain"]}
+        {**signal, "explain": "규칙 근거: " + signal["explain"]}
         for signal in reference["signals"]
     ]
     specific_advice = [item for item in reference["advice"] if item not in DEFAULT_ADVICE[reference["level"]]]
